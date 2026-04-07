@@ -1,1 +1,1 @@
-from .mec_lvm_env import MECLVMEnv
+from .mec_lvm_env import MultiAgentMECLVMEnv

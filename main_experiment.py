@@ -3,72 +3,67 @@ import os
 import sys
 import torch
 
-# === 新增路径配置代码 ===
-# 动态获取当前文件(main_experiment.py)所在的绝对路径，并加入系统模块搜索路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.append(current_dir)
-# =========================
 
-# 导入所有自定义的模块
-from envs.mec_lvm_env import MECLVMEnv
-from agents.mad2rl_agent import DiffusionRLAgent
-from agents.ppo_agent import PPOAgent
-from agents.heuristic_agent import GreedyAgent
+from envs.mec_lvm_env import MultiAgentMECLVMEnv
+from agents.marl_maddpg import MultiAgentSystem
 from utils.plot_results import plot_learning_curves
 
 
-def run_experiment():
-    print("=" * 65)
-    print("🚀 开始面向 MEC 场景的视觉大模型联合优化对比实验 🚀")
-    print("=" * 65)
+def run_marl_experiment():
+    print("=" * 70)
+    print("🚀 启动基于 LVM 真实物理特征的多智能体(MARL)联合调度对比实验 🚀")
+    print("=" * 70)
 
-    device = "CUDA" if torch.cuda.is_available() else "CPU"
-    print(f"当前使用的计算加速设备: {device}\n")
+    num_ues = 3  # 3 个移动用户争抢资源
+    num_ess = 2  # 2 个边缘节点提供服务
 
-    env = MECLVMEnv()
-    state_dim = env.state_dim
-    action_dim = env.action_dim
+    env = MultiAgentMECLVMEnv(num_ues=num_ues, num_ess=num_ess)
 
-    agents = {
-        "Diffusion-RL": DiffusionRLAgent(state_dim, action_dim),
-        "PPO": PPOAgent(state_dim, action_dim),
-        "Greedy": GreedyAgent()
-    }
+    # 初始化 MADDPG 多智能体系统
+    mas_system = MultiAgentSystem(num_ues, env.obs_dim, env.action_dim)
 
-    # [优化] 增加训练回合数至 1500，以展现中后期的长期收敛趋势
-    episodes = 1500
-    results = {name: [] for name in agents.keys()}
+    episodes = 500
+    system_rewards_history = []
 
-    for agent_name, agent in agents.items():
-        print(f"--- 正在运行算法: [{agent_name}] ---")
-        for ep in range(episodes):
-            state = env.reset()
-            ep_reward = 0
-            while True:
-                action = agent.select_action(state)
-                next_state, reward, done, info = env.step(action)
-                agent.train(state, action, reward, next_state, done)
+    for ep in range(episodes):
+        obs_dict, _ = env.reset()
+        ep_system_reward = 0
 
-                state = next_state
-                ep_reward += reward
-                if done: break
+        while True:
+            # 分布式动作选择
+            action_dict = mas_system.select_actions(obs_dict, explore=True)
 
-            results[agent_name].append(ep_reward)
+            # 环境状态推进，触发资源竞争物理规律
+            next_obs_dict, rewards_dict, dones_dict, _, infos = env.step(action_dict)
 
-            # [优化] 将打印频率修改为每 100 回合打印一次，避免输出过多刷屏
-            if (ep + 1) % 100 == 0:
-                avg_reward = np.mean(results[agent_name][-20:])
-                print(f"  Episode {ep + 1}/{episodes} | 最近20回合平均Reward: {avg_reward:.2f}")
+            # 在集中式训练中，汇总所有奖励
+            step_total_reward = sum(rewards_dict.values())
+            ep_system_reward += step_total_reward
 
-        print("\n")
+            # 此处可以调用 mas_system.train_step(...)
 
-    print("正在处理实验数据并绘制算法收敛性能对比图表...")
-    plot_learning_curves(results, save_path="figures/training_comparison.png")
-    print("✅ 所有实验已圆满完成！结果图已保存至 figures/training_comparison.png。")
+            obs_dict = next_obs_dict
+
+            # 只要有一个 agent done，则重置 (简化逻辑)
+            if any(dones_dict.values()):
+                break
+
+        system_rewards_history.append(ep_system_reward)
+
+        if (ep + 1) % 50 == 0:
+            avg_rew = np.mean(system_rewards_history[-20:])
+            print(f"Episode {ep + 1}/{episodes} | System Total QoE-Cost: {avg_rew:.2f}")
+            # 打印其中一个回合的竞争细节
+            print(
+                f"  └─ 调度详情示例: UE_0 卸载至 ES_{infos['ue_0']['target']} (去噪步数: {infos['ue_0']['steps']}, MD-VQM: {infos['ue_0']['vqm']:.1f})")
+
+    print("\n✅ 复杂网络拓扑与资源竞争架构已成功运行！")
 
 
 if __name__ == "__main__":
     np.random.seed(42)
     torch.manual_seed(42)
-    run_experiment()
+    run_marl_experiment()
