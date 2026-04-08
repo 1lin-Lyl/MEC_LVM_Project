@@ -1,1 +1,1 @@
-from .plot_results import plot_learning_curves
+from .plot_results import plot_experiment_results

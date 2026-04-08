@@ -1,3 +1,3 @@
-from .mad2rl_agent import DiffusionRLAgent
-from .ppo_agent import PPOAgent
-from .heuristic_agent import GreedyAgent
+from .mad2rl_agent import MADiffusionRLSystem
+from .ppo_agent import MAPPOAgentSystem
+from .heuristic_agent import GreedyAgentSystem
