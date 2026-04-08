@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import os
-import sys
 
 from envs.mec_lvm_env import MultiAgentMECLVMEnvMulti
 from agents.mad2rl_agent import MADiffusionRLSystem
@@ -10,8 +9,8 @@ from agents.heuristic_agent import GreedyAgentSystem
 from utils.plot_results import plot_experiment_results
 
 
-def train_agent(agent_name, AgentClass, env, episodes=1500):
-    print(f"\n🚀 开始在 Env B 训练 {agent_name} ...")
+def train_agent(agent_name, AgentClass, env, env_name, episodes=1500):
+    print(f"\n🚀 开始在 Env {env_name} (规模: {env.num_ess}ES, {env.num_ues}UE) 独立训练 {agent_name} ...")
     agent = AgentClass(env.num_ues, env.obs_dim, env.action_dim)
 
     metrics = {"reward": [], "latency": [], "energy": [], "vqm": []}
@@ -30,7 +29,6 @@ def train_agent(agent_name, AgentClass, env, episodes=1500):
                 explore = True if ep < int(episodes * 0.8) else False
                 res = agent.select_actions(obs_dict, explore=explore)
 
-                # PPO 会返回 log_probs，特殊解包处理
                 if isinstance(res, tuple):
                     action_dict, log_probs = res
                 else:
@@ -38,14 +36,12 @@ def train_agent(agent_name, AgentClass, env, episodes=1500):
 
             next_obs_dict, rewards_dict, dones_dict, _, infos = env.step(action_dict)
 
-            # 数据指标跟踪
             ep_reward += sum(rewards_dict.values())
             ep_latency += np.mean([infos[ue]['delay'] for ue in infos])
             ep_energy += np.mean([infos[ue]['energy'] for ue in infos])
             ep_vqm += np.mean([infos[ue]['vqm'] for ue in infos])
             steps += 1
 
-            # 强化学习权重更新
             if agent_name == "MA-Diffusion-RL":
                 agent.train_step(obs_dict, action_dict, rewards_dict)
             elif agent_name == "MAPPO":
@@ -56,7 +52,7 @@ def train_agent(agent_name, AgentClass, env, episodes=1500):
                 break
 
         if agent_name == "MAPPO":
-            agent.update()  # 仅回合并更新一次网络
+            agent.update()
 
         metrics["reward"].append(ep_reward)
         metrics["latency"].append(ep_latency / steps)
@@ -65,62 +61,41 @@ def train_agent(agent_name, AgentClass, env, episodes=1500):
 
         if (ep + 1) % 100 == 0:
             print(
-                f"  └─ Ep {ep + 1}/{episodes} | Avg Rwd: {np.mean(metrics['reward'][-50:]):.2f} | Latency: {np.mean(metrics['latency'][-50:]):.3f}s")
+                f"  └─ Ep {ep + 1}/{episodes} | Sys Rwd: {np.mean(metrics['reward'][-50:]):.2f} | Latency: {np.mean(metrics['latency'][-50:]):.3f}s")
 
-    return agent, metrics
-
-
-def evaluate_zero_shot(agent, env, agent_name, test_ep=10):
-    """Zero-shot 泛化测试，不需要 Central Critic 介入，仅用 Actor"""
-    total_rewards = []
-    for _ in range(test_ep):
-        obs_dict, _ = env.reset()
-        ep_reward = 0
-        while True:
-            if agent_name == "Greedy":
-                action_dict = agent.select_actions(obs_dict, env=env)
-            else:
-                res = agent.select_actions(obs_dict, explore=False)
-                action_dict = res[0] if isinstance(res, tuple) else res
-
-            obs_dict, rewards_dict, dones_dict, _, _ = env.step(action_dict)
-            ep_reward += sum(rewards_dict.values())
-            if any(dones_dict.values()): break
-        total_rewards.append(ep_reward)
-    return np.mean(total_rewards)
+    return metrics
 
 
 if __name__ == "__main__":
     np.random.seed(42)
     torch.manual_seed(42)
 
-    # 1. 初始化三种网络规模
-    env_A = MultiAgentMECLVMEnvMulti(env_type="A")  # 2 ES, 10 UE
-    env_B = MultiAgentMECLVMEnvMulti(env_type="B")  # 5 ES, 25 UE
-    env_C = MultiAgentMECLVMEnvMulti(env_type="C")  # 10 ES, 50 UE
+    # 1. 实例化三种真实规模的环境
+    envs = {
+        "A": MultiAgentMECLVMEnvMulti(env_type="A"),  # 2 ES, 10 UE
+        "B": MultiAgentMECLVMEnvMulti(env_type="B"),  # 5 ES, 25 UE
+        "C": MultiAgentMECLVMEnvMulti(env_type="C")  # 10 ES, 50 UE
+    }
 
-    # 2. 依次在主环境 Env B 中进行完整训练
     algos = [
         ("MA-Diffusion-RL", MADiffusionRLSystem),
         ("MAPPO", MAPPOAgentSystem),
         ("Greedy", GreedyAgentSystem)
     ]
 
-    full_metrics = {}
-    scalability_results = {}
+    # 全局结果大字典: full_results[env_name][algo_name] = metrics
+    full_results = {"A": {}, "B": {}, "C": {}}
 
-    for name, AgentClass in algos:
-        trained_agent, metrics = train_agent(name, AgentClass, env_B, episodes=1500)
-        full_metrics[name] = metrics
-
-        print(f"\n🔄 正在对 {name} 进行 Zero-shot 规模扩展泛化测试...")
-        reward_A = evaluate_zero_shot(trained_agent, env_A, name)
-        reward_B = np.mean(metrics['reward'][-50:])  # 取训练后期收敛值
-        reward_C = evaluate_zero_shot(trained_agent, env_C, name)
-
-        scalability_results[name] = {"A": reward_A, "B": reward_B, "C": reward_C}
-        print(f"  └─ Env A (Small): {reward_A:.2f} | Env B (Medium): {reward_B:.2f} | Env C (Large): {reward_C:.2f}")
+    # 2. 彻底抛弃 Zero-shot，在每个环境中进行独立严谨的从头训练
+    for env_name, env_obj in envs.items():
+        print(f"\n" + "=" * 50)
+        print(f"🌐 正在进入网络规模 {env_name} 独立实验组")
+        print("=" * 50)
+        for algo_name, AgentClass in algos:
+            # Greedy 算法无需 1500 轮，为了公平对比和展示平稳曲线，我们同样让它跑 1500 轮测均值
+            metrics = train_agent(algo_name, AgentClass, env_obj, env_name, episodes=1500)
+            full_results[env_name][algo_name] = metrics
 
     # 3. 数据出图
-    print("\n✅ 所有实验和测试已圆满完成！正在绘制学术排版级长图...")
-    plot_experiment_results(full_metrics, scalability_results)
+    print("\n✅ 所有环境下的独立训练实验已圆满完成！正在绘制学术排版级长图...")
+    plot_experiment_results(full_results)

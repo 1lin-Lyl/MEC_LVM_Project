@@ -12,7 +12,6 @@ class MAPPOActor(nn.Module):
             nn.Linear(128, 128), nn.LayerNorm(128), nn.ReLU(),
             nn.Linear(128, act_dim), nn.Tanh()
         )
-        # 可学习的动作方差参数
         self.log_std = nn.Parameter(torch.zeros(1, act_dim))
 
     def forward(self, obs):
@@ -36,11 +35,8 @@ class MAPPOCritic(nn.Module):
 
 
 class MAPPOAgentSystem:
-    """ Parameter-Sharing MAPPO (Baseline 1) """
-
     def __init__(self, num_agents_train, obs_dim, action_dim):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         self.actor = MAPPOActor(obs_dim, action_dim).to(self.device)
         self.critic = MAPPOCritic(num_agents_train, obs_dim).to(self.device)
 
@@ -70,11 +66,17 @@ class MAPPOAgentSystem:
         agent_ids = list(obs_dict.keys())
         obs_arr = np.array([obs_dict[aid] for aid in agent_ids])
         act_arr = np.array([action_dict[aid] for aid in agent_ids])
-        sys_reward = sum(rewards_dict.values()) / 10.0
+
+        # 【核心修复】：与 Diffusion-RL 保持同等强度的 Reward Scaling，消灭负收益螺旋崩溃
+        avg_reward_per_agent = sum(rewards_dict.values()) / len(agent_ids)
+        sys_reward = avg_reward_per_agent / 10.0
+
+        # log_probs 是一个向量，需要对整个系统的动作概率取和，以更新全局策略
+        system_log_prob = log_probs.sum().item()
 
         self.buffer.append({
             'obs': obs_arr, 'acts': act_arr,
-            'log_probs': log_probs, 'reward': sys_reward
+            'sys_log_prob': system_log_prob, 'reward': sys_reward
         })
 
     def reset_buffer(self):
@@ -83,10 +85,9 @@ class MAPPOAgentSystem:
     def update(self):
         if len(self.buffer) == 0: return
 
-        # 简单处理的回合级别 PPO 策略更新
         obs_batch = torch.FloatTensor(np.array([b['obs'] for b in self.buffer])).to(self.device)
         act_batch = torch.FloatTensor(np.array([b['acts'] for b in self.buffer])).to(self.device)
-        old_log_probs = torch.stack([b['log_probs'] for b in self.buffer]).to(self.device)
+        old_log_probs = torch.FloatTensor([b['sys_log_prob'] for b in self.buffer]).to(self.device)  # [Batch]
 
         rewards = [b['reward'] for b in self.buffer]
         returns = []
@@ -94,33 +95,39 @@ class MAPPOAgentSystem:
         for r in reversed(rewards):
             R = r + 0.95 * R
             returns.insert(0, R)
-        returns = torch.FloatTensor(returns).to(self.device)
 
-        # Flatten tensors for global states
+        # 归一化 returns 进一步稳定 PPO
+        returns = torch.FloatTensor(returns).to(self.device)
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+        returns = returns.view(-1, 1)  # [Batch, 1]
+
         b_size, n_agents, obs_dim = obs_batch.shape
         g_obs_batch = obs_batch.view(b_size, -1)
 
-        for _ in range(4):  # 4 epochs
+        for _ in range(4):
             mean, std = self.actor(obs_batch)
             dist = torch.distributions.Normal(mean, std)
-            new_log_probs = dist.log_prob(act_batch).sum(dim=-1)
+            # 计算新的联合对数概率
+            new_log_probs = dist.log_prob(act_batch).sum(dim=-1).sum(dim=-1)  # [Batch]
 
-            values = self.critic(g_obs_batch).squeeze()
-            advantages = returns - values.detach()
+            values = self.critic(g_obs_batch).view(-1, 1)  # [Batch, 1]
+            advantages = (returns - values.detach()).squeeze(-1)  # [Batch]
 
-            ratio = torch.exp(new_log_probs - old_log_probs.detach())
-            surr1 = ratio * advantages.unsqueeze(1)
-            surr2 = torch.clamp(ratio, 1.0 - 0.2, 1.0 + 0.2) * advantages.unsqueeze(1)
+            ratio = torch.exp(new_log_probs - old_log_probs.detach())  # [Batch]
+            surr1 = ratio * advantages
+            surr2 = torch.clamp(ratio, 1.0 - 0.2, 1.0 + 0.2) * advantages
             actor_loss = -torch.min(surr1, surr2).mean()
 
             critic_loss = nn.functional.mse_loss(values, returns)
 
             self.actor_opt.zero_grad()
             actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=0.5)
             self.actor_opt.step()
 
             self.critic_opt.zero_grad()
             critic_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=0.5)
             self.critic_opt.step()
 
         self.buffer.clear()

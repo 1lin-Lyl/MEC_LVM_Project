@@ -6,26 +6,25 @@ from gymnasium import spaces
 class MultiAgentMECLVMEnvMulti(gym.Env):
     """
     环境: 面向视觉大模型(LVM)的多智能体MEC卸载与推理步数联合优化环境。
-    支持三种规模的零样本(Zero-shot)扩展性测试。
     """
 
     def __init__(self, env_type="B"):
         super().__init__()
 
-        # 支持 Scalability 测试的环境规模配置
-        if env_type == "A":  # 小型网络
+        # 真实环境规模配置
+        if env_type == "A":  # 小型测试网络
             self.num_ess = 2
             self.num_ues = 10
         elif env_type == "B":  # 中型主训练网络
             self.num_ess = 5
             self.num_ues = 25
-        elif env_type == "C":  # 大型泛化网络
+        elif env_type == "C":  # 大型扩展网络
             self.num_ess = 10
             self.num_ues = 50
         else:
             raise ValueError("Unknown env_type")
 
-        # 物理常量定义
+        # 核心物理常量
         self.B_es = 20.0  # 每台边缘服务器的独立接入下行带宽 (MHz)
         self.P_tx = 0.1  # UE发送功率 (W)
         self.N_0 = 1e-9  # 噪声功率谱密度
@@ -34,7 +33,7 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         self.obs_dim = 3
         self.action_dim = 2  # Action: [ES Selection, Inference Steps]
 
-        self.max_steps = 10  # 每个 Episode 的时隙数量 (为加快训练速度与重组率设置)
+        self.max_steps = 10  # 缩短回合长度以加速训练迭代
         self.current_step = 0
         self.F_ess = None
         self.states = {}
@@ -108,7 +107,7 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         rewards = {}
         infos = {}
 
-        # 2. 物理资源分配结算
+        # 2. 物理资源分配结算 (比例公平竞争)
         for i in range(self.num_ues):
             agent_id = f"ue_{i}"
             data_size, local_cpu, channel_gain = self.states[agent_id]
@@ -127,7 +126,7 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 delay = req_cycles / local_cpu
                 energy = 0.5 * data_size * (local_cpu ** 2) * (steps / 100.0)
             else:
-                # 边缘计算结算（考虑多 UE 比例公平竞争资源）
+                # 边缘计算结算
                 competitors = es_load_count[target_es]
                 alloc_bandwidth = self.B_es / competitors
                 snr = (self.P_tx * channel_gain) / (alloc_bandwidth * self.N_0)
@@ -142,7 +141,8 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 delay = trans_delay + comp_delay
                 energy = trans_energy
 
-            # 综合目标函数: 最大化 VQM 质量，惩罚延迟和能耗
+            # 综合目标函数: 严格统一奖励标尺，任何人不得特权
+            # Reward = VQM - 1.2 * Delay - 0.5 * Energy
             cost = 1.2 * delay + 0.5 * energy
             reward = vqm_utility - cost
 
@@ -152,7 +152,6 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 'vqm': vqm_utility, 'delay': delay, 'energy': energy
             }
 
-        # 刷新下一个时隙的状态
         self._generate_states()
 
         done = self.current_step >= self.max_steps
