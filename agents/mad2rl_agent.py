@@ -5,10 +5,10 @@ import numpy as np
 
 
 # ==========================================
-# 1. 核心网络架构 (含维度安全对齐)
+# 1. 核心网络架构
 # ==========================================
 class DiffusionMLP(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim=128):
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(state_dim + action_dim + 1, hidden_dim),
@@ -43,20 +43,20 @@ class DiffusionActor(nn.Module):
             noise_pred = self.model(state, x, t_tensor)
             x = x - noise_pred * 0.1
 
-        return torch.tanh(x)
+        return torch.tanh(x)  # 确保输出严格落在 [-1, 1] 区间
 
 
 class CentralizedCritic(nn.Module):
-    def __init__(self, num_agents, obs_dim, action_dim, hidden_dim=256):
+    def __init__(self, num_agents, obs_dim, action_dim, hidden_dim=512):
         super().__init__()
         input_dim = num_agents * (obs_dim + action_dim)
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 1)  # 输出严格为 1 维
+            nn.Linear(hidden_dim // 2, 1)
         )
 
     def forward(self, global_obs, global_acts):
@@ -73,8 +73,8 @@ class MADiffusionRLSystem:
         self.actor = DiffusionActor(obs_dim, action_dim).to(self.device)
         self.critic = CentralizedCritic(num_agents_train, obs_dim, action_dim).to(self.device)
 
-        self.actor_opt = optim.Adam(self.actor.parameters(), lr=1e-4)
-        self.critic_opt = optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.actor_opt = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_opt = optim.Adam(self.critic.parameters(), lr=1e-3)
 
     def select_actions(self, obs_dict, explore=True):
         agent_ids = list(obs_dict.keys())
@@ -99,11 +99,11 @@ class MADiffusionRLSystem:
         g_obs = obs_tensor.view(1, -1)
         g_acts = act_tensor.view(1, -1)
 
-        # 【核心修复】：按 UE 数量求平均，防止 Env C 规模下的奖励尺度爆炸导致网络崩溃
+        # 奖励量级压缩，匹配网络最佳敏感度区间
         avg_reward_per_agent = sum(rewards_dict.values()) / num_agents
-        scaled_reward = avg_reward_per_agent / 10.0
+        scaled_reward = avg_reward_per_agent / 5.0
 
-        # 严格使用 view(-1, 1) 对齐 shape [1, 1]，彻底解决 Broadcasting 报错
+        # 彻底解决 Broadcasting Bug：确保强制二维对齐 [1, 1]
         g_reward = torch.FloatTensor([[scaled_reward]]).view(-1, 1).to(self.device)
 
         # --- 1. 更新 Central Critic ---
@@ -112,7 +112,7 @@ class MADiffusionRLSystem:
 
         self.critic_opt.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=0.5)  # 梯度裁剪防爆炸
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_opt.step()
 
         # --- 2. 更新 Diffusion Actor ---
@@ -123,5 +123,5 @@ class MADiffusionRLSystem:
 
         self.actor_opt.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=0.5)  # 梯度裁剪防爆炸
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
         self.actor_opt.step()

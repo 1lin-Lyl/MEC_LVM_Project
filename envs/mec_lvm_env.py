@@ -30,18 +30,22 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         self.N_0 = 1e-9  # 噪声功率谱密度
         self.eta = 0.5  # LVM 计算复杂度系数 (G Cycles / Mbits)
 
-        self.obs_dim = 3
-        self.action_dim = 2  # Action: [ES Selection, Inference Steps]
+        # 【调优1】状态增强：除了UE私有特征，还要追加 M个ES的算力上限 和 M个ES的实时负载
+        self.obs_dim = 3 + 2 * self.num_ess
+        # 【调优2】动作重构：前 M+1 维作为 ES 选择的 Logits，最后 1 维作为推理步数控制
+        self.action_dim = self.num_ess + 2
 
-        self.max_steps = 10  # 缩短回合长度以加速训练迭代
+        self.max_steps = 10
         self.current_step = 0
         self.F_ess = None
         self.states = {}
+        self.es_loads = [0] * self.num_ess  # 初始化实时负载
 
     def reset(self, seed=None):
         if seed is not None:
             np.random.seed(seed)
         self.current_step = 0
+        self.es_loads = [0] * self.num_ess
 
         # 每台 ES 的可用算力随机初始化 (G Cycles / s)
         self.F_ess = [np.random.uniform(150, 250) for _ in range(self.num_ess)]
@@ -59,20 +63,25 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             ], dtype=np.float32)
 
     def _get_normalized_states(self):
+        """融合全局视角，输出严格归一化的观测向量"""
         norm_states = {}
+        f_norm = np.array(self.F_ess) / 250.0  # ES 算力特征归一化
+        l_norm = np.array(self.es_loads) / float(self.num_ues)  # ES 负载拥塞特征归一化
+
         for k, v in self.states.items():
             norm_v = np.copy(v)
             norm_v[0] /= 20.0  # S_n 归一化
             norm_v[1] /= 15.0  # F_loc 归一化
             norm_v[2] /= 5e-6  # h_n 归一化
-            norm_states[k] = norm_v
+            # 拼接全局 State (维度 = 3 + 2M)
+            norm_states[k] = np.concatenate([norm_v, f_norm, l_norm]).astype(np.float32)
         return norm_states
 
     def _calculate_md_vqm(self, steps):
-        """多维视频质量模型 (MD-VQM) 的质量效用评分"""
-        q_max = 20.0  # 最高分上限
-        theta = 0.05  # 指数增长控制参数
-        d_min = 5  # 最小生成所需步数
+        """多维视频质量模型 (MD-VQM)"""
+        q_max = 20.0
+        theta = 0.05
+        d_min = 5
         if steps <= d_min:
             return 0.0
         return q_max * (1 - np.exp(-theta * (steps - d_min)))
@@ -84,25 +93,24 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         inference_steps = {}
         es_load_count = {k: 0 for k in range(1, self.num_ess + 1)}
 
-        # 1. 动作映射与竞争登记
+        # 1. 动作映射解构
         for i in range(self.num_ues):
             agent_id = f"ue_{i}"
             act = action_dict[agent_id]
 
-            # Action 0: 卸载决策映射 -> [-1, 1] 映射到 [0, M] (0 代表本地)
-            mapped_act0 = (np.clip(act[0], -1.0, 1.0) + 1.0) / 2.0
-            target = int(np.round(mapped_act0 * self.num_ess))
-            target = np.clip(target, 0, self.num_ess)
+            # Action [0 : M+1]: 使用 Argmax 提取具有最高 Logit 的通道作为决策目标
+            target = int(np.argmax(act[:self.num_ess + 1]))
             offload_decisions[agent_id] = target
-
             if target > 0:
                 es_load_count[target] += 1
 
-            # Action 1: LVM 推理步数映射 -> [-1, 1] 映射到 [10, 50] 步
-            mapped_act1 = (np.clip(act[1], -1.0, 1.0) + 1.0) / 2.0
-            steps = int(np.round(mapped_act1 * 40 + 10))
-            steps = np.clip(steps, 10, 50)
-            inference_steps[agent_id] = steps
+            # Action [-1]: LVM 推理步数映射 -> [-1, 1] 映射到 [10, 50] 步
+            step_val = act[-1]
+            steps = int(np.round((np.clip(step_val, -1.0, 1.0) + 1.0) / 2.0 * 40 + 10))
+            inference_steps[agent_id] = np.clip(steps, 10, 50)
+
+        # 更新全局状态中的服务器负载，供下一步 State 观测
+        self.es_loads = [es_load_count[m + 1] for m in range(self.num_ess)]
 
         rewards = {}
         infos = {}
@@ -122,11 +130,9 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             energy = 0.0
 
             if target_es == 0:
-                # 本地推理结算
                 delay = req_cycles / local_cpu
                 energy = 0.5 * data_size * (local_cpu ** 2) * (steps / 100.0)
             else:
-                # 边缘计算结算
                 competitors = es_load_count[target_es]
                 alloc_bandwidth = self.B_es / competitors
                 snr = (self.P_tx * channel_gain) / (alloc_bandwidth * self.N_0)
@@ -141,10 +147,14 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 delay = trans_delay + comp_delay
                 energy = trans_energy
 
-            # 综合目标函数: 严格统一奖励标尺，任何人不得特权
-            # Reward = VQM - 1.2 * Delay - 0.5 * Energy
-            cost = 1.2 * delay + 0.5 * energy
-            reward = vqm_utility - cost
+            # 【调优3】延迟截断与量级对齐，彻底阻止惩罚无底洞造成的网络梯度爆炸
+            clip_delay = min(delay, 15.0)
+            clip_energy = min(energy, 20.0)
+            penalty = -5.0 if delay >= 15.0 else 0.0
+
+            # 将代价映射至合理区间，权重匹配 MD-VQM 的 0~20 量级
+            cost = 5.0 * (clip_delay / 15.0) + 2.0 * (clip_energy / 20.0)
+            reward = vqm_utility - cost + penalty
 
             rewards[agent_id] = reward
             infos[agent_id] = {

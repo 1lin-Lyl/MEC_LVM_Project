@@ -11,8 +11,9 @@ from utils.plot_results import plot_experiment_results
 
 def train_agent(agent_name, AgentClass, env, env_name, episodes=1500):
     print(f"\n🚀 开始在 Env {env_name} (规模: {env.num_ess}ES, {env.num_ues}UE) 独立训练 {agent_name} ...")
-    agent = AgentClass(env.num_ues, env.obs_dim, env.action_dim)
 
+    # 动态适应环境提供的观测维度和动作维度
+    agent = AgentClass(env.num_ues, env.obs_dim, env.action_dim)
     metrics = {"reward": [], "latency": [], "energy": [], "vqm": []}
 
     for ep in range(episodes):
@@ -24,7 +25,7 @@ def train_agent(agent_name, AgentClass, env, env_name, episodes=1500):
 
         while True:
             if agent_name == "Greedy":
-                action_dict = agent.select_actions(obs_dict, env=env)
+                action_dict = agent.select_actions(obs_dict)
             else:
                 explore = True if ep < int(episodes * 0.8) else False
                 res = agent.select_actions(obs_dict, explore=explore)
@@ -83,16 +84,15 @@ if __name__ == "__main__":
         ("Greedy", GreedyAgentSystem)
     ]
 
-    # 全局结果大字典: full_results[env_name][algo_name] = metrics
+    # 全局结果大字典
     full_results = {"A": {}, "B": {}, "C": {}}
 
-    # 2. 彻底抛弃 Zero-shot，在每个环境中进行独立严谨的从头训练
+    # 2. 在每个环境中进行独立严谨的从头训练
     for env_name, env_obj in envs.items():
         print(f"\n" + "=" * 50)
         print(f"🌐 正在进入网络规模 {env_name} 独立实验组")
         print("=" * 50)
         for algo_name, AgentClass in algos:
-            # Greedy 算法无需 1500 轮，为了公平对比和展示平稳曲线，我们同样让它跑 1500 轮测均值
             metrics = train_agent(algo_name, AgentClass, env_obj, env_name, episodes=1500)
             full_results[env_name][algo_name] = metrics
 

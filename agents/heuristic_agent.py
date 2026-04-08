@@ -6,39 +6,50 @@ class GreedyAgentSystem:
 
     def __init__(self, num_agents, obs_dim, action_dim):
         self.num_agents = num_agents
+        # 反推解析用
+        self.num_ess = action_dim - 2
 
     def select_actions(self, obs_dict, env=None, explore=False):
         actions = {}
 
-        if env is not None:
-            es_loads = [0] * env.num_ess
-            for i in range(len(obs_dict)):
-                agent_id = f"ue_{i}"
-                data_size, local_cpu, channel_gain = obs_dict[agent_id]
+        for agent_id, obs in obs_dict.items():
+            # 严格防作弊：仅从传入的 State 解析
+            data_size = obs[0] * 20.0
+            local_cpu = obs[1] * 15.0
+            channel_gain = obs[2] * 5e-6
 
-                best_es = 0
-                best_score = local_cpu / (data_size + 1e-9)  # 本地处理基准分
+            F_ess = obs[3: 3 + self.num_ess] * 250.0
+            es_loads = obs[3 + self.num_ess: 3 + 2 * self.num_ess] * self.num_agents
 
-                for es_idx in range(env.num_ess):
-                    es_cpu = env.F_ess[es_idx]
-                    comp_score = es_cpu / (es_loads[es_idx] + 1.0)
-                    score = comp_score * (channel_gain * 1e5)
+            best_target = 0
+            # 预估本地 40 步推理的延迟
+            min_delay = (0.5 * data_size * 40) / (local_cpu + 1e-9)
 
-                    if score > best_score:
-                        best_score = score
-                        best_es = es_idx + 1  # 1-based index
+            # 遍历尝试所有边缘节点
+            for es_idx in range(self.num_ess):
+                comp_load = es_loads[es_idx] + 1.0
+                es_cpu = F_ess[es_idx]
 
-                if best_es > 0:
-                    es_loads[best_es - 1] += 1
+                # 预估信道传输延迟
+                alloc_bandwidth = 20.0 / comp_load
+                snr = (0.1 * channel_gain) / (alloc_bandwidth * 1e-9)
+                trans_rate = alloc_bandwidth * np.log2(1 + snr + 1e-9)
+                trans_delay = data_size / trans_rate
 
-                # 动作严格逆向映射到连续空间 [-1, 1] 保证底层 step 处理一致性
-                act0 = (best_es / env.num_ess) * 2.0 - 1.0
-                act1 = 0.5  # 映射到 40 步推理
+                # 预估边缘计算延迟
+                comp_delay = (0.5 * data_size * 40) / (es_cpu / comp_load)
 
-                actions[agent_id] = np.array([act0, act1], dtype=np.float32)
-        else:
-            for aid in obs_dict.keys():
-                actions[aid] = np.array([1.0, 1.0], dtype=np.float32)
+                total_es_delay = trans_delay + comp_delay
+                if total_es_delay < min_delay:
+                    min_delay = total_es_delay
+                    best_target = es_idx + 1  # 1-based index
+
+            # 【核心逻辑】：构建一个能让环境正常解析出 best_target 的符合 Action Space 的向量
+            act = np.full(self.num_ess + 2, -1.0, dtype=np.float32)
+            act[best_target] = 1.0  # 令正确位置 Logit 值为最大，确保 np.argmax 选中它
+            act[-1] = 0.5  # 映射为精确执行 40 步推理
+
+            actions[agent_id] = act
 
         return actions
 

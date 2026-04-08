@@ -8,9 +8,9 @@ class MAPPOActor(nn.Module):
     def __init__(self, obs_dim, act_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(obs_dim, 128), nn.LayerNorm(128), nn.ReLU(),
-            nn.Linear(128, 128), nn.LayerNorm(128), nn.ReLU(),
-            nn.Linear(128, act_dim), nn.Tanh()
+            nn.Linear(obs_dim, 256), nn.LayerNorm(256), nn.ReLU(),
+            nn.Linear(256, 256), nn.LayerNorm(256), nn.ReLU(),
+            nn.Linear(256, act_dim), nn.Tanh()
         )
         self.log_std = nn.Parameter(torch.zeros(1, act_dim))
 
@@ -25,9 +25,9 @@ class MAPPOCritic(nn.Module):
         super().__init__()
         input_dim = num_agents * obs_dim
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 256), nn.LayerNorm(256), nn.ReLU(),
-            nn.Linear(256, 128), nn.ReLU(),
-            nn.Linear(128, 1)
+            nn.Linear(input_dim, 512), nn.LayerNorm(512), nn.ReLU(),
+            nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, 1)
         )
 
     def forward(self, global_obs):
@@ -40,8 +40,8 @@ class MAPPOAgentSystem:
         self.actor = MAPPOActor(obs_dim, action_dim).to(self.device)
         self.critic = MAPPOCritic(num_agents_train, obs_dim).to(self.device)
 
-        self.actor_opt = optim.Adam(self.actor.parameters(), lr=1e-4)
-        self.critic_opt = optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.actor_opt = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_opt = optim.Adam(self.critic.parameters(), lr=1e-3)
         self.buffer = []
 
     def select_actions(self, obs_dict, explore=True):
@@ -67,11 +67,10 @@ class MAPPOAgentSystem:
         obs_arr = np.array([obs_dict[aid] for aid in agent_ids])
         act_arr = np.array([action_dict[aid] for aid in agent_ids])
 
-        # 【核心修复】：与 Diffusion-RL 保持同等强度的 Reward Scaling，消灭负收益螺旋崩溃
+        # 标尺缩放，对齐 Diffusion
         avg_reward_per_agent = sum(rewards_dict.values()) / len(agent_ids)
-        sys_reward = avg_reward_per_agent / 10.0
+        sys_reward = avg_reward_per_agent / 5.0
 
-        # log_probs 是一个向量，需要对整个系统的动作概率取和，以更新全局策略
         system_log_prob = log_probs.sum().item()
 
         self.buffer.append({
@@ -87,7 +86,7 @@ class MAPPOAgentSystem:
 
         obs_batch = torch.FloatTensor(np.array([b['obs'] for b in self.buffer])).to(self.device)
         act_batch = torch.FloatTensor(np.array([b['acts'] for b in self.buffer])).to(self.device)
-        old_log_probs = torch.FloatTensor([b['sys_log_prob'] for b in self.buffer]).to(self.device)  # [Batch]
+        old_log_probs = torch.FloatTensor([b['sys_log_prob'] for b in self.buffer]).to(self.device)
 
         rewards = [b['reward'] for b in self.buffer]
         returns = []
@@ -96,10 +95,9 @@ class MAPPOAgentSystem:
             R = r + 0.95 * R
             returns.insert(0, R)
 
-        # 归一化 returns 进一步稳定 PPO
         returns = torch.FloatTensor(returns).to(self.device)
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-        returns = returns.view(-1, 1)  # [Batch, 1]
+        returns = returns.view(-1, 1)
 
         b_size, n_agents, obs_dim = obs_batch.shape
         g_obs_batch = obs_batch.view(b_size, -1)
@@ -107,13 +105,12 @@ class MAPPOAgentSystem:
         for _ in range(4):
             mean, std = self.actor(obs_batch)
             dist = torch.distributions.Normal(mean, std)
-            # 计算新的联合对数概率
-            new_log_probs = dist.log_prob(act_batch).sum(dim=-1).sum(dim=-1)  # [Batch]
+            new_log_probs = dist.log_prob(act_batch).sum(dim=-1).sum(dim=-1)
 
-            values = self.critic(g_obs_batch).view(-1, 1)  # [Batch, 1]
-            advantages = (returns - values.detach()).squeeze(-1)  # [Batch]
+            values = self.critic(g_obs_batch).view(-1, 1)
+            advantages = (returns - values.detach()).squeeze(-1)
 
-            ratio = torch.exp(new_log_probs - old_log_probs.detach())  # [Batch]
+            ratio = torch.exp(new_log_probs - old_log_probs.detach())
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1.0 - 0.2, 1.0 + 0.2) * advantages
             actor_loss = -torch.min(surr1, surr2).mean()
@@ -122,12 +119,12 @@ class MAPPOAgentSystem:
 
             self.actor_opt.zero_grad()
             actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
             self.actor_opt.step()
 
             self.critic_opt.zero_grad()
             critic_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
             self.critic_opt.step()
 
         self.buffer.clear()
