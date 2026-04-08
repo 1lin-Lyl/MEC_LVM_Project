@@ -17,6 +17,7 @@ class MAPPOActor(nn.Module):
     def forward(self, obs):
         mean = self.net(obs)
         std = torch.exp(self.log_std).expand_as(mean)
+        std = torch.clamp(std, min=1e-3, max=10.0)  # 【核心修复】防止 std 过小导致分布计算时产生 NaN
         return mean, std
 
 
@@ -71,11 +72,11 @@ class MAPPOAgentSystem:
         avg_reward_per_agent = sum(rewards_dict.values()) / len(agent_ids)
         sys_reward = avg_reward_per_agent / 5.0
 
-        system_log_prob = log_probs.sum().item()
-
+        # 【核心修复】移除 .sum().item()，必须保留智能体维度的对数概率向量以防止梯度爆炸
         self.buffer.append({
             'obs': obs_arr, 'acts': act_arr,
-            'sys_log_prob': system_log_prob, 'reward': sys_reward
+            'log_probs': log_probs.cpu().numpy(),
+            'reward': sys_reward
         })
 
     def reset_buffer(self):
@@ -86,7 +87,8 @@ class MAPPOAgentSystem:
 
         obs_batch = torch.FloatTensor(np.array([b['obs'] for b in self.buffer])).to(self.device)
         act_batch = torch.FloatTensor(np.array([b['acts'] for b in self.buffer])).to(self.device)
-        old_log_probs = torch.FloatTensor([b['sys_log_prob'] for b in self.buffer]).to(self.device)
+        # 【核心修复】还原为二维张量 [Batch, Agents]
+        old_log_probs = torch.FloatTensor(np.array([b['log_probs'] for b in self.buffer])).to(self.device)
 
         rewards = [b['reward'] for b in self.buffer]
         returns = []
@@ -105,11 +107,14 @@ class MAPPOAgentSystem:
         for _ in range(4):
             mean, std = self.actor(obs_batch)
             dist = torch.distributions.Normal(mean, std)
-            new_log_probs = dist.log_prob(act_batch).sum(dim=-1).sum(dim=-1)
+            # 【核心修复】只对特征维度求和，保留各个 Agent 的独立维度
+            new_log_probs = dist.log_prob(act_batch).sum(dim=-1)
 
             values = self.critic(g_obs_batch).view(-1, 1)
-            advantages = (returns - values.detach()).squeeze(-1)
+            advantages = (returns - values.detach())
 
+            # 此时 new_log_probs 和 old_log_probs 为 [Batch, Agents]
+            # advantages 为 [Batch, 1]，通过广播机制(Broadcasting)自动作用到每个智能体的截断损失上
             ratio = torch.exp(new_log_probs - old_log_probs.detach())
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1.0 - 0.2, 1.0 + 0.2) * advantages

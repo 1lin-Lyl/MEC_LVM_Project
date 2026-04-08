@@ -89,6 +89,12 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
     def step(self, action_dict):
         self.current_step += 1
 
+        # 【安全防护】防止由于神经网络输出 NaN 导致的环境连带崩溃
+        for agent_id, act in action_dict.items():
+            if np.isnan(act).any():
+                # 若网络损坏导致输出 NaN，则执行全静默的退化动作 (本地计算，最低质量要求)
+                action_dict[agent_id] = np.zeros_like(act)
+
         offload_decisions = {}
         inference_steps = {}
         es_load_count = {k: 0 for k in range(1, self.num_ess + 1)}
