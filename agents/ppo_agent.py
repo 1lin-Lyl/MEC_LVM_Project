@@ -17,7 +17,7 @@ class MAPPOActor(nn.Module):
     def forward(self, obs):
         mean = self.net(obs)
         std = torch.exp(self.log_std).expand_as(mean)
-        std = torch.clamp(std, min=1e-3, max=10.0)  # 【核心修复】防止 std 过小导致分布计算时产生 NaN
+        std = torch.clamp(std, min=1e-3, max=10.0)
         return mean, std
 
 
@@ -45,6 +45,13 @@ class MAPPOAgentSystem:
         self.critic_opt = optim.Adam(self.critic.parameters(), lr=1e-3)
         self.buffer = []
 
+    def update_lr(self, lr_actor, lr_critic):
+        """【新增】支持动态学习率退火"""
+        for param_group in self.actor_opt.param_groups:
+            param_group['lr'] = lr_actor
+        for param_group in self.critic_opt.param_groups:
+            param_group['lr'] = lr_critic
+
     def select_actions(self, obs_dict, explore=True):
         agent_ids = list(obs_dict.keys())
         obs_tensor = torch.FloatTensor(np.array([obs_dict[aid] for aid in agent_ids])).to(self.device)
@@ -68,11 +75,9 @@ class MAPPOAgentSystem:
         obs_arr = np.array([obs_dict[aid] for aid in agent_ids])
         act_arr = np.array([action_dict[aid] for aid in agent_ids])
 
-        # 标尺缩放，对齐 Diffusion
         avg_reward_per_agent = sum(rewards_dict.values()) / len(agent_ids)
         sys_reward = avg_reward_per_agent / 5.0
 
-        # 【核心修复】移除 .sum().item()，必须保留智能体维度的对数概率向量以防止梯度爆炸
         self.buffer.append({
             'obs': obs_arr, 'acts': act_arr,
             'log_probs': log_probs.cpu().numpy(),
@@ -82,12 +87,12 @@ class MAPPOAgentSystem:
     def reset_buffer(self):
         self.buffer = []
 
-    def update(self):
+    def update(self, entropy_coef=0.01):
+        """【修改】添加动态熵正则化机制，避免模式崩溃"""
         if len(self.buffer) == 0: return
 
         obs_batch = torch.FloatTensor(np.array([b['obs'] for b in self.buffer])).to(self.device)
         act_batch = torch.FloatTensor(np.array([b['acts'] for b in self.buffer])).to(self.device)
-        # 【核心修复】还原为二维张量 [Batch, Agents]
         old_log_probs = torch.FloatTensor(np.array([b['log_probs'] for b in self.buffer])).to(self.device)
 
         rewards = [b['reward'] for b in self.buffer]
@@ -107,18 +112,20 @@ class MAPPOAgentSystem:
         for _ in range(4):
             mean, std = self.actor(obs_batch)
             dist = torch.distributions.Normal(mean, std)
-            # 【核心修复】只对特征维度求和，保留各个 Agent 的独立维度
             new_log_probs = dist.log_prob(act_batch).sum(dim=-1)
+
+            # 引入熵正则项，鼓励探索，防止过早收敛
+            entropy = dist.entropy().sum(dim=-1).mean()
 
             values = self.critic(g_obs_batch).view(-1, 1)
             advantages = (returns - values.detach())
 
-            # 此时 new_log_probs 和 old_log_probs 为 [Batch, Agents]
-            # advantages 为 [Batch, 1]，通过广播机制(Broadcasting)自动作用到每个智能体的截断损失上
             ratio = torch.exp(new_log_probs - old_log_probs.detach())
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1.0 - 0.2, 1.0 + 0.2) * advantages
-            actor_loss = -torch.min(surr1, surr2).mean()
+
+            # 【核心修复】将熵加成到 Actor 的 Loss 优化中（减去正熵=最小化负熵）
+            actor_loss = -torch.min(surr1, surr2).mean() - entropy_coef * entropy
 
             critic_loss = nn.functional.mse_loss(values, returns)
 

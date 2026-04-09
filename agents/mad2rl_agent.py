@@ -43,7 +43,7 @@ class DiffusionActor(nn.Module):
             noise_pred = self.model(state, x, t_tensor)
             x = x - noise_pred * 0.1
 
-        return torch.tanh(x)  # 确保输出严格落在 [-1, 1] 区间
+        return torch.tanh(x)
 
 
 class CentralizedCritic(nn.Module):
@@ -76,14 +76,22 @@ class MADiffusionRLSystem:
         self.actor_opt = optim.Adam(self.actor.parameters(), lr=3e-4)
         self.critic_opt = optim.Adam(self.critic.parameters(), lr=1e-3)
 
-    def select_actions(self, obs_dict, explore=True):
+    def update_lr(self, lr_actor, lr_critic):
+        """【新增】支持动态学习率退火，防止晚期灾难性遗忘"""
+        for param_group in self.actor_opt.param_groups:
+            param_group['lr'] = lr_actor
+        for param_group in self.critic_opt.param_groups:
+            param_group['lr'] = lr_critic
+
+    def select_actions(self, obs_dict, explore=True, noise_scale=0.1):
+        """【新增】支持动态噪声衰减，确保后期收敛"""
         agent_ids = list(obs_dict.keys())
         obs_tensor = torch.FloatTensor(np.array([obs_dict[aid] for aid in agent_ids])).to(self.device)
 
         with torch.no_grad():
             actions = self.actor.sample_action(obs_tensor)
             if explore:
-                noise = torch.randn_like(actions) * 0.1
+                noise = torch.randn_like(actions) * noise_scale
                 actions = torch.clamp(actions + noise, -1.0, 1.0)
 
         actions_np = actions.cpu().numpy()
@@ -99,11 +107,9 @@ class MADiffusionRLSystem:
         g_obs = obs_tensor.view(1, -1)
         g_acts = act_tensor.view(1, -1)
 
-        # 奖励量级压缩，匹配网络最佳敏感度区间
         avg_reward_per_agent = sum(rewards_dict.values()) / num_agents
         scaled_reward = avg_reward_per_agent / 5.0
 
-        # 彻底解决 Broadcasting Bug：确保强制二维对齐 [1, 1]
         g_reward = torch.FloatTensor([[scaled_reward]]).view(-1, 1).to(self.device)
 
         # --- 1. 更新 Central Critic ---
