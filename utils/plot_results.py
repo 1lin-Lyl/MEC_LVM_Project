@@ -38,7 +38,7 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     # Subplot (b): Performance Metrics Bar Charts (双 Y 轴重构)
     # =========================================================
     ax2 = fig.add_subplot(1, 3, 2)
-    ax2_twin = ax2.twinx()  # 【修复】分配独立 Y 轴给庞大的焦耳级别能耗数据
+    ax2_twin = ax2.twinx()  # 分配独立 Y 轴给庞大的焦耳级别能耗数据
 
     x = np.arange(len(algos))
     width = 0.25

@@ -133,7 +133,7 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             if target_es == 0:
                 local_cpu = max(local_cpu, 1e-9)
                 delay = req_cycles / local_cpu
-                # 【修复】本地动态功率计算：基于CPU频率(近似平方关系/10以匹配手机芯片1-10W功耗)
+                # 本地动态功率计算：基于CPU频率(近似平方关系/10以匹配手机芯片1-10W功耗)
                 p_local = 0.5 * (local_cpu ** 2) / 10.0
                 energy = p_local * delay
             else:
@@ -148,13 +148,13 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 alloc_cpu = self.F_ess[target_es - 1] / competitors
                 comp_delay = req_cycles / alloc_cpu
 
-                # 【修复】增加边缘服务器推理的庞大能耗 (假设50W功率)
+                # 增加边缘服务器推理的庞大能耗 (假设50W功率)
                 comp_energy = self.P_es_active * comp_delay
 
                 delay = trans_delay + comp_delay
                 energy = trans_energy + comp_energy  # 系统总真实能耗包含传输 + ES计算
 
-            # 【修复】将惩罚和成本的量级隔离开，不污染真实能耗返回
+            # 将惩罚和成本的量级隔离开，不污染真实能耗返回
             clip_delay = min(delay, 15.0)
             clip_energy = min(energy, 500.0)  # RL可感知的截断最大能耗，防止极值破坏网络
             penalty = -5.0 if delay >= 15.0 else 0.0

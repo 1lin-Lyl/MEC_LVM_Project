@@ -2,12 +2,25 @@ import numpy as np
 import torch
 import os
 import copy
+import random
+import csv
 
 from envs.mec_lvm_env import MultiAgentMECLVMEnvMulti
 from agents.mad2rl_agent import MADiffusionRLSystem
 from agents.ppo_agent import MAPPOAgentSystem
 from agents.heuristic_agent import GreedyAgentSystem
 from utils.plot_results import plot_experiment_results
+
+
+def set_seed(seed=42):
+    """全局绝对固定随机种子机制，保证论文数据100%可复现"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
@@ -56,7 +69,7 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
             next_obs_dict, rewards_dict, dones_dict, _, infos = env.step(action_dict)
 
             ep_reward += sum(rewards_dict.values())
-            # 【修复】延迟和质量使用取均值，但系统的系统总能耗必须用 sum() 提取全场总能耗 (J)
+            # 延迟和质量使用取均值，但系统的系统总能耗必须用 sum() 提取全场总能耗 (J)
             ep_latency += np.mean([infos[ue]['delay'] for ue in infos])
             ep_energy += np.sum([infos[ue]['energy'] for ue in infos])
             ep_vqm += np.mean([infos[ue]['vqm'] for ue in infos])
@@ -113,7 +126,7 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
             next_obs_dict, rewards_dict, dones_dict, _, infos = env.step(action_dict)
             ep_reward += sum(rewards_dict.values())
             ep_latency += np.mean([infos[ue]['delay'] for ue in infos])
-            ep_energy += np.sum([infos[ue]['energy'] for ue in infos])  # 【修复】测试阶段也要使用 sum 获取全场总能耗
+            ep_energy += np.sum([infos[ue]['energy'] for ue in infos])  # 测试阶段也要使用 sum 获取全场总能耗
             ep_vqm += np.mean([infos[ue]['vqm'] for ue in infos])
             steps += 1
 
@@ -134,8 +147,8 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
 
 
 if __name__ == "__main__":
-    np.random.seed(42)
-    torch.manual_seed(42)
+    # 初始化全局种子，确保论文数据一致性
+    set_seed(42)
 
     envs = {
         "A": MultiAgentMECLVMEnvMulti(env_type="A"),
@@ -161,5 +174,25 @@ if __name__ == "__main__":
             full_results[env_name][algo_name] = metrics
             eval_results[env_name][algo_name] = eval_avg
 
-    print("\n✅ 所有环境下的独立训练与测试已完成！正在绘制学术排版级双Y轴长图...")
+    # 将最终用于论文的最佳评测数据无损导出为 CSV
+    csv_file = "final_results.csv"
+    with open(csv_file, mode='w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            ["Environment", "Algorithm", "Total Reward", "Avg Latency (s)", "System Energy (J)", "Avg MD-VQM"])
+
+        for env_name in ["A", "B", "C"]:
+            for algo_name, _ in algos:
+                res = eval_results[env_name][algo_name]
+                writer.writerow([
+                    f"Env_{env_name}",
+                    algo_name,
+                    f"{res['reward']:.4f}",
+                    f"{res['latency']:.4f}",
+                    f"{res['energy']:.4f}",
+                    f"{res['vqm']:.4f}"
+                ])
+
+    print(f"\n📄 最终测试数据已成功汇总并导出至: {csv_file} (可直接用于论文制表)")
+    print("✅ 正在绘制学术排版级双Y轴长图...")
     plot_experiment_results(full_results, eval_results)
