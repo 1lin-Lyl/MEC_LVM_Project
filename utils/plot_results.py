@@ -35,26 +35,34 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     ax1.grid(True, linestyle='--', alpha=0.6)
 
     # =========================================================
-    # Subplot (b): Performance Metrics Bar Charts (基于 Checkpoint 评测数据)
+    # Subplot (b): Performance Metrics Bar Charts (双 Y 轴重构)
     # =========================================================
     ax2 = fig.add_subplot(1, 3, 2)
-    labels = ['Avg Latency (s)', 'Avg Energy (J)', 'Avg MD-VQM']
-    x = np.arange(len(labels))
+    ax2_twin = ax2.twinx()  # 【修复】分配独立 Y 轴给庞大的焦耳级别能耗数据
+
+    x = np.arange(len(algos))
     width = 0.25
 
-    for i, algo in enumerate(algos):
-        lat = eval_results["C"][algo]['latency']
-        eng = eval_results["C"][algo]['energy']
-        vqm = eval_results["C"][algo]['vqm']
-        values = [lat, eng, vqm]
+    lat_vals = [eval_results["C"][algo]['latency'] for algo in algos]
+    eng_vals = [eval_results["C"][algo]['energy'] for algo in algos]
+    vqm_vals = [eval_results["C"][algo]['vqm'] for algo in algos]
 
-        ax2.bar(x + (i - 1) * width, values, width, label=algo,
-                color=colors.get(algo, 'k'), alpha=0.9, edgecolor='white')
+    # 将 Latency 和 VQM 画在左轴，System Energy 画在右轴
+    ax2.bar(x - width, lat_vals, width, label='Avg Latency (s)', color='#4DBBD5', alpha=0.9, edgecolor='white')
+    ax2_twin.bar(x, eng_vals, width, label='System Energy (J)', color='#E64B35', alpha=0.9, edgecolor='white')
+    ax2.bar(x + width, vqm_vals, width, label='Avg MD-VQM Score', color='#00A087', alpha=0.9, edgecolor='white')
 
     ax2.set_title("(b) Core Metrics Comparison (Env C)\n(Best Model Evaluated)", fontsize=13, fontweight='bold')
     ax2.set_xticks(x)
-    ax2.set_xticklabels(labels, fontsize=12)
-    ax2.legend(loc='upper right', frameon=True)
+    ax2.set_xticklabels(algos, fontsize=12)
+    ax2.set_ylabel("Latency (s) / VQM Score", fontsize=12)
+    ax2_twin.set_ylabel("System Total Energy (J)", fontsize=12)
+
+    # 合并图例，悬浮放在不遮挡的上方位置
+    lines, labels = ax2.get_legend_handles_labels()
+    lines2, labels2 = ax2_twin.get_legend_handles_labels()
+    ax2.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=3, frameon=True,
+               fontsize=10)
     ax2.grid(True, axis='y', linestyle='--', alpha=0.6)
 
     # =========================================================
@@ -67,7 +75,6 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     x_scale = np.arange(len(env_sizes))
 
     for algo in algos:
-        # 提取各个算法在三个环境下的最终测试 Reward 与 Latency
         rwd_vals = [eval_results[env][algo]['reward'] for env in ["A", "B", "C"]]
         lat_vals = [eval_results[env][algo]['latency'] for env in ["A", "B", "C"]]
 
@@ -90,7 +97,7 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
 
     lines, labels = ax3.get_legend_handles_labels()
     lines2, labels2 = ax3_twin.get_legend_handles_labels()
-    ax3.legend(lines + lines2, labels + labels2, loc='upper right', frameon=True, fontsize=10)
+    ax3.legend(lines + lines2, labels + labels2, loc='upper left', frameon=True, fontsize=10)
 
     ax3.grid(True, linestyle='--', alpha=0.6)
 

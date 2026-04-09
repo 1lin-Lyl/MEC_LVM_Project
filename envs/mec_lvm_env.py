@@ -29,17 +29,17 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         self.P_tx = 0.1  # UE发送功率 (W)
         self.N_0 = 1e-9  # 噪声功率谱密度
         self.eta = 0.5  # LVM 计算复杂度系数 (G Cycles / Mbits)
+        self.P_es_active = 50.0  # 边缘服务器工作状态推理功率 (W)
 
-        # 【调优1】状态增强：除了UE私有特征，还要追加 M个ES的算力上限 和 M个ES的实时负载
+        # 状态与动作维度
         self.obs_dim = 3 + 2 * self.num_ess
-        # 【调优2】动作重构：前 M+1 维作为 ES 选择的 Logits，最后 1 维作为推理步数控制
         self.action_dim = self.num_ess + 2
 
         self.max_steps = 10
         self.current_step = 0
         self.F_ess = None
         self.states = {}
-        self.es_loads = [0] * self.num_ess  # 初始化实时负载
+        self.es_loads = [0] * self.num_ess
 
     def reset(self, seed=None):
         if seed is not None:
@@ -65,15 +65,14 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
     def _get_normalized_states(self):
         """融合全局视角，输出严格归一化的观测向量"""
         norm_states = {}
-        f_norm = np.array(self.F_ess) / 250.0  # ES 算力特征归一化
-        l_norm = np.array(self.es_loads) / float(self.num_ues)  # ES 负载拥塞特征归一化
+        f_norm = np.array(self.F_ess) / 250.0
+        l_norm = np.array(self.es_loads) / float(self.num_ues)
 
         for k, v in self.states.items():
             norm_v = np.copy(v)
-            norm_v[0] /= 20.0  # S_n 归一化
-            norm_v[1] /= 15.0  # F_loc 归一化
-            norm_v[2] /= 5e-6  # h_n 归一化
-            # 拼接全局 State (维度 = 3 + 2M)
+            norm_v[0] /= 20.0
+            norm_v[1] /= 15.0
+            norm_v[2] /= 5e-6
             norm_states[k] = np.concatenate([norm_v, f_norm, l_norm]).astype(np.float32)
         return norm_states
 
@@ -89,10 +88,9 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
     def step(self, action_dict):
         self.current_step += 1
 
-        # 【安全防护】防止由于神经网络输出 NaN 导致的环境连带崩溃
+        # 安全防护
         for agent_id, act in action_dict.items():
             if np.isnan(act).any():
-                # 若网络损坏导致输出 NaN，则执行全静默的退化动作 (本地计算，最低质量要求)
                 action_dict[agent_id] = np.zeros_like(act)
 
         offload_decisions = {}
@@ -104,24 +102,21 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             agent_id = f"ue_{i}"
             act = action_dict[agent_id]
 
-            # Action [0 : M+1]: 使用 Argmax 提取具有最高 Logit 的通道作为决策目标
             target = int(np.argmax(act[:self.num_ess + 1]))
             offload_decisions[agent_id] = target
             if target > 0:
                 es_load_count[target] += 1
 
-            # Action [-1]: LVM 推理步数映射 -> [-1, 1] 映射到 [10, 50] 步
             step_val = act[-1]
             steps = int(np.round((np.clip(step_val, -1.0, 1.0) + 1.0) / 2.0 * 40 + 10))
             inference_steps[agent_id] = np.clip(steps, 10, 50)
 
-        # 更新全局状态中的服务器负载，供下一步 State 观测
         self.es_loads = [es_load_count[m + 1] for m in range(self.num_ess)]
 
         rewards = {}
         infos = {}
 
-        # 2. 物理资源分配结算 (比例公平竞争)
+        # 2. 物理资源与【真实能耗】分配结算
         for i in range(self.num_ues):
             agent_id = f"ue_{i}"
             data_size, local_cpu, channel_gain = self.states[agent_id]
@@ -133,11 +128,14 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             vqm_utility = self._calculate_md_vqm(steps)
 
             delay = 0.0
-            energy = 0.0
+            energy = 0.0  # 真实物理系统能耗 (J)
 
             if target_es == 0:
+                local_cpu = max(local_cpu, 1e-9)
                 delay = req_cycles / local_cpu
-                energy = 0.5 * data_size * (local_cpu ** 2) * (steps / 100.0)
+                # 【修复】本地动态功率计算：基于CPU频率(近似平方关系/10以匹配手机芯片1-10W功耗)
+                p_local = 0.5 * (local_cpu ** 2) / 10.0
+                energy = p_local * delay
             else:
                 competitors = es_load_count[target_es]
                 alloc_bandwidth = self.B_es / competitors
@@ -150,26 +148,28 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 alloc_cpu = self.F_ess[target_es - 1] / competitors
                 comp_delay = req_cycles / alloc_cpu
 
-                delay = trans_delay + comp_delay
-                energy = trans_energy
+                # 【修复】增加边缘服务器推理的庞大能耗 (假设50W功率)
+                comp_energy = self.P_es_active * comp_delay
 
-            # 【调优3】延迟截断与量级对齐，彻底阻止惩罚无底洞造成的网络梯度爆炸
+                delay = trans_delay + comp_delay
+                energy = trans_energy + comp_energy  # 系统总真实能耗包含传输 + ES计算
+
+            # 【修复】将惩罚和成本的量级隔离开，不污染真实能耗返回
             clip_delay = min(delay, 15.0)
-            clip_energy = min(energy, 20.0)
+            clip_energy = min(energy, 500.0)  # RL可感知的截断最大能耗，防止极值破坏网络
             penalty = -5.0 if delay >= 15.0 else 0.0
 
-            # 将代价映射至合理区间，权重匹配 MD-VQM 的 0~20 量级
-            cost = 5.0 * (clip_delay / 15.0) + 2.0 * (clip_energy / 20.0)
+            # 将 RL 的 Cost 严格对齐至 0~20 的量级
+            cost = 5.0 * (clip_delay / 15.0) + 2.0 * (clip_energy / 500.0)
             reward = vqm_utility - cost + penalty
 
             rewards[agent_id] = reward
             infos[agent_id] = {
                 'target': target_es, 'steps': steps,
-                'vqm': vqm_utility, 'delay': delay, 'energy': energy
+                'vqm': vqm_utility, 'delay': delay, 'energy': energy  # <--- 如实返回真实的百焦耳级物理能耗
             }
 
         self._generate_states()
-
         done = self.current_step >= self.max_steps
         dones = {f"ue_{i}": done for i in range(self.num_ues)}
 
