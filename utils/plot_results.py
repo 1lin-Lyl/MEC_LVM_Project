@@ -25,22 +25,25 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     ax1 = fig.add_subplot(1, 3, 1)
     metrics_env_C = full_results["C"]
 
-    for algo in algos:
-        rewards = metrics_env_C[algo]['reward']
-        window = max(10, len(rewards) // 20)
-        smoothed = np.convolve(rewards, np.ones(window) / window, mode='valid')
-        x_axis = range(len(smoothed))
+    # 【画图修复】剔除未经训练的基线算法，防止由于离群平直线压缩 Y 轴视野
+    rl_algos = ['MA-Diffusion-RL', 'MAPPO']
 
-        # 对于不训练的基线，曲线将平稳展示为直线带微弱抖动
-        ax1.plot(x_axis, smoothed, label=algo, color=colors.get(algo, 'k'), linewidth=2.5)
-        std_val = np.std(smoothed[-50:]) if len(smoothed) > 50 else np.std(smoothed)
-        ax1.fill_between(x_axis, smoothed - std_val * 0.3, smoothed + std_val * 0.3,
-                         alpha=0.15, color=colors.get(algo, 'k'))
+    for algo in rl_algos:
+        if algo in metrics_env_C:
+            rewards = metrics_env_C[algo]['reward']
+            window = max(10, len(rewards) // 20)
+            smoothed = np.convolve(rewards, np.ones(window) / window, mode='valid')
+            x_axis = range(len(smoothed))
+
+            ax1.plot(x_axis, smoothed, label=algo, color=colors.get(algo, 'k'), linewidth=2.5)
+            std_val = np.std(smoothed[-50:]) if len(smoothed) > 50 else np.std(smoothed)
+            ax1.fill_between(x_axis, smoothed - std_val * 0.3, smoothed + std_val * 0.3,
+                             alpha=0.15, color=colors.get(algo, 'k'))
 
     ax1.set_title("(a) Training Convergence in Env C (50 UEs)\n(Moving Average shown)", fontsize=13, fontweight='bold')
     ax1.set_xlabel("Training Episodes", fontsize=12)
     ax1.set_ylabel("System Accumulated Reward", fontsize=12)
-    ax1.legend(loc='lower right', frameon=True, fontsize=10, ncol=2)
+    ax1.legend(loc='lower right', frameon=True, fontsize=10)
     ax1.grid(True, linestyle='--', alpha=0.6)
 
     # =========================================================

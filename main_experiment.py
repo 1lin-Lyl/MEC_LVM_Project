@@ -5,7 +5,7 @@ import copy
 import random
 import csv
 
-from envs.mec_lvm_env import MultiAgentMECLVMEnvMulti
+from envs.mec_lvm_env_multi import MultiAgentMECLVMEnvMulti
 from agents.mad2rl_agent import MADiffusionRLSystem
 from agents.ppo_agent import MAPPOAgentSystem
 from agents.heuristic_agent import GreedyAgentSystem
@@ -15,7 +15,6 @@ from utils.plot_results import plot_experiment_results
 
 
 def set_seed(seed=42):
-    """全局绝对固定随机种子机制，保证论文数据100%可复现"""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -29,6 +28,9 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
     print(f"\n🚀 开始在 Env {env_name} (规模: {env.num_ess}ES, {env.num_ues}UE) 独立训练/测试 {agent_name} ...")
 
     agent = AgentClass(env.num_ues, env.obs_dim, env.action_dim)
+    # 初始化专家导师，用于专家引导探索
+    expert_agent = GreedyAgentSystem(env.num_ues, env.obs_dim, env.action_dim)
+
     metrics = {"reward": [], "latency": [], "energy": [], "vqm": []}
 
     best_reward = -float('inf')
@@ -51,6 +53,12 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
             lr_a = 3e-4 - decay_ratio * 2.9e-4
             lr_c = 1e-3 - decay_ratio * 9e-4
 
+            # 专家引导概率衰减逻辑
+        if ep < 500:
+            expert_prob = 0.5 - (0.5 - 0.05) * (ep / 500.0)
+        else:
+            expert_prob = 0.05
+
         if hasattr(agent, 'update_lr') and agent_name in ["MA-Diffusion-RL", "MAPPO"]:
             agent.update_lr(lr_a, lr_c)
 
@@ -61,11 +69,22 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
             agent.reset_buffer()
 
         while True:
+            # 引入 Action Mask 传入
+            action_mask_dict = None
+            if hasattr(env, 'get_action_mask'):
+                action_mask_dict = {aid: env.get_action_mask(aid) for aid in obs_dict.keys()}
+
             if agent_name in ["Greedy", "Random", "LocalOnly"]:
                 action_dict = agent.select_actions(obs_dict)
+
             elif agent_name == "MA-Diffusion-RL":
-                res = agent.select_actions(obs_dict, explore=True, noise_scale=noise_scale)
-                action_dict = res
+                # 【专家引导混合探索】以 expert_prob 的概率使用 Greedy，否则使用当前策略网络
+                if random.random() < expert_prob:
+                    action_dict = expert_agent.select_actions(obs_dict)
+                else:
+                    action_dict = agent.select_actions(obs_dict, explore=True, noise_scale=noise_scale,
+                                                       action_mask_dict=action_mask_dict)
+
             else:  # MAPPO
                 res = agent.select_actions(obs_dict, explore=True)
                 action_dict, log_probs = res
@@ -79,7 +98,9 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
             steps += 1
 
             if agent_name == "MA-Diffusion-RL":
-                agent.train_step(obs_dict, action_dict, rewards_dict)
+                # 【离线 Buffer 收集】包含混探经验
+                agent.store_transition(obs_dict, action_dict, rewards_dict, next_obs_dict)
+                agent.train_step()  # 随机抽取批次学习
             elif agent_name == "MAPPO":
                 agent.store_transition(obs_dict, action_dict, log_probs, rewards_dict)
 
@@ -95,7 +116,6 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
         metrics["energy"].append(ep_energy / steps)
         metrics["vqm"].append(ep_vqm / steps)
 
-        # 动态滑动窗口保存 Best Model
         if len(metrics["reward"]) >= 50:
             current_avg_rwd = np.mean(metrics["reward"][-50:])
             if current_avg_rwd > best_reward:
@@ -120,9 +140,17 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
         obs_dict, _ = env.reset()
         ep_reward, ep_latency, ep_energy, ep_vqm, steps = 0, 0, 0, 0, 0
         while True:
+            if hasattr(env, 'get_action_mask'):
+                action_mask_dict = {aid: env.get_action_mask(aid) for aid in obs_dict.keys()}
+            else:
+                action_mask_dict = None
+
             if agent_name in ["Greedy", "Random", "LocalOnly"]:
                 action_dict = agent.select_actions(obs_dict)
-            else:
+            elif agent_name == "MA-Diffusion-RL":
+                res = agent.select_actions(obs_dict, explore=False, action_mask_dict=action_mask_dict)
+                action_dict = res
+            else:  # MAPPO
                 res = agent.select_actions(obs_dict, explore=False)
                 action_dict = res[0] if isinstance(res, tuple) else res
 
@@ -150,7 +178,6 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
 
 
 if __name__ == "__main__":
-    # 【完美复现】全局种子固定
     set_seed(42)
 
     envs = {
@@ -159,7 +186,6 @@ if __name__ == "__main__":
         "C": MultiAgentMECLVMEnvMulti(env_type="C")
     }
 
-    # 【新增下界基线】集结 5 大核心算法
     algos = [
         ("MA-Diffusion-RL", MADiffusionRLSystem),
         ("MAPPO", MAPPOAgentSystem),
@@ -180,7 +206,6 @@ if __name__ == "__main__":
             full_results[env_name][algo_name] = metrics
             eval_results[env_name][algo_name] = eval_avg
 
-    # 【数据导出】用于论文数据制表
     csv_file = "final_results.csv"
     with open(csv_file, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
