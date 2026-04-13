@@ -7,9 +7,17 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     """学术级别自动绘图：三合一连环子图"""
     plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
 
-    fig = plt.figure(figsize=(18, 5))
-    colors = {'MA-Diffusion-RL': '#E64B35', 'MAPPO': '#4DBBD5', 'Greedy': '#00A087'}
-    algos = ['MA-Diffusion-RL', 'MAPPO', 'Greedy']
+    fig = plt.figure(figsize=(20, 6))
+
+    # 采用学术顶级期刊 (Nature/Science) 经典高辨识度调色盘
+    colors = {
+        'MA-Diffusion-RL': '#E64B35',  # NPG 红
+        'MAPPO': '#4DBBD5',  # NPG 蓝
+        'Greedy': '#00A087',  # NPG 绿
+        'Random': '#3C5488',  # NPG 深蓝
+        'LocalOnly': '#7E6148'  # NPG 棕
+    }
+    algos = ['MA-Diffusion-RL', 'MAPPO', 'Greedy', 'Random', 'LocalOnly']
 
     # =========================================================
     # Subplot (a): Training Convergence Curve (重点展示 Env C)
@@ -23,6 +31,7 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
         smoothed = np.convolve(rewards, np.ones(window) / window, mode='valid')
         x_axis = range(len(smoothed))
 
+        # 对于不训练的基线，曲线将平稳展示为直线带微弱抖动
         ax1.plot(x_axis, smoothed, label=algo, color=colors.get(algo, 'k'), linewidth=2.5)
         std_val = np.std(smoothed[-50:]) if len(smoothed) > 50 else np.std(smoothed)
         ax1.fill_between(x_axis, smoothed - std_val * 0.3, smoothed + std_val * 0.3,
@@ -31,14 +40,14 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     ax1.set_title("(a) Training Convergence in Env C (50 UEs)\n(Moving Average shown)", fontsize=13, fontweight='bold')
     ax1.set_xlabel("Training Episodes", fontsize=12)
     ax1.set_ylabel("System Accumulated Reward", fontsize=12)
-    ax1.legend(loc='lower right', frameon=True)
+    ax1.legend(loc='lower right', frameon=True, fontsize=10, ncol=2)
     ax1.grid(True, linestyle='--', alpha=0.6)
 
     # =========================================================
-    # Subplot (b): Performance Metrics Bar Charts (双 Y 轴重构)
+    # Subplot (b): Performance Metrics Bar Charts (五算法并排)
     # =========================================================
     ax2 = fig.add_subplot(1, 3, 2)
-    ax2_twin = ax2.twinx()  # 分配独立 Y 轴给庞大的焦耳级别能耗数据
+    ax2_twin = ax2.twinx()
 
     x = np.arange(len(algos))
     width = 0.25
@@ -47,18 +56,19 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     eng_vals = [eval_results["C"][algo]['energy'] for algo in algos]
     vqm_vals = [eval_results["C"][algo]['vqm'] for algo in algos]
 
-    # 将 Latency 和 VQM 画在左轴，System Energy 画在右轴
     ax2.bar(x - width, lat_vals, width, label='Avg Latency (s)', color='#4DBBD5', alpha=0.9, edgecolor='white')
     ax2_twin.bar(x, eng_vals, width, label='System Energy (J)', color='#E64B35', alpha=0.9, edgecolor='white')
     ax2.bar(x + width, vqm_vals, width, label='Avg MD-VQM Score', color='#00A087', alpha=0.9, edgecolor='white')
 
     ax2.set_title("(b) Core Metrics Comparison (Env C)\n(Best Model Evaluated)", fontsize=13, fontweight='bold')
     ax2.set_xticks(x)
-    ax2.set_xticklabels(algos, fontsize=12)
+    # 为保证 5 种算法名称不拥挤，采用旋转和换行显示
+    display_names = ['Diffusion-RL', 'MAPPO', 'Greedy', 'Random', 'Local']
+    ax2.set_xticklabels(display_names, fontsize=11, rotation=15)
+
     ax2.set_ylabel("Latency (s) / VQM Score", fontsize=12)
     ax2_twin.set_ylabel("System Total Energy (J)", fontsize=12)
 
-    # 合并图例，悬浮放在不遮挡的上方位置
     lines, labels = ax2.get_legend_handles_labels()
     lines2, labels2 = ax2_twin.get_legend_handles_labels()
     ax2.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=3, frameon=True,
@@ -66,7 +76,7 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
     ax2.grid(True, axis='y', linestyle='--', alpha=0.6)
 
     # =========================================================
-    # Subplot (c): Scalability Impact (基于各环境的 Checkpoint 评测数据)
+    # Subplot (c): Scalability Impact (五曲线对比)
     # =========================================================
     ax3 = fig.add_subplot(1, 3, 3)
     ax3_twin = ax3.twinx()
@@ -97,7 +107,7 @@ def plot_experiment_results(full_results, eval_results, save_path="figures/marl_
 
     lines, labels = ax3.get_legend_handles_labels()
     lines2, labels2 = ax3_twin.get_legend_handles_labels()
-    ax3.legend(lines + lines2, labels + labels2, loc='upper left', frameon=True, fontsize=10)
+    ax3.legend(lines + lines2, labels + labels2, loc='upper right', frameon=True, fontsize=10)
 
     ax3.grid(True, linestyle='--', alpha=0.6)
 
