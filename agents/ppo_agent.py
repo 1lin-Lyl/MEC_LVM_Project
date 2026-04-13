@@ -7,6 +7,7 @@ import numpy as np
 class MAPPOActor(nn.Module):
     def __init__(self, obs_dim, act_dim):
         super().__init__()
+        # 【防拥塞重构 4】维度自适应，确保不受扩展的 obs_dim 影响
         self.net = nn.Sequential(
             nn.Linear(obs_dim, 256), nn.LayerNorm(256), nn.ReLU(),
             nn.Linear(256, 256), nn.LayerNorm(256), nn.ReLU(),
@@ -46,7 +47,6 @@ class MAPPOAgentSystem:
         self.buffer = []
 
     def update_lr(self, lr_actor, lr_critic):
-        """【新增】支持动态学习率退火"""
         for param_group in self.actor_opt.param_groups:
             param_group['lr'] = lr_actor
         for param_group in self.critic_opt.param_groups:
@@ -88,7 +88,6 @@ class MAPPOAgentSystem:
         self.buffer = []
 
     def update(self, entropy_coef=0.01):
-        """【修改】添加动态熵正则化机制，避免模式崩溃"""
         if len(self.buffer) == 0: return
 
         obs_batch = torch.FloatTensor(np.array([b['obs'] for b in self.buffer])).to(self.device)
@@ -114,7 +113,6 @@ class MAPPOAgentSystem:
             dist = torch.distributions.Normal(mean, std)
             new_log_probs = dist.log_prob(act_batch).sum(dim=-1)
 
-            # 引入熵正则项，鼓励探索，防止过早收敛
             entropy = dist.entropy().sum(dim=-1).mean()
 
             values = self.critic(g_obs_batch).view(-1, 1)
@@ -124,9 +122,7 @@ class MAPPOAgentSystem:
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1.0 - 0.2, 1.0 + 0.2) * advantages
 
-            # 【核心修复】将熵加成到 Actor 的 Loss 优化中（减去正熵=最小化负熵）
             actor_loss = -torch.min(surr1, surr2).mean() - entropy_coef * entropy
-
             critic_loss = nn.functional.mse_loss(values, returns)
 
             self.actor_opt.zero_grad()

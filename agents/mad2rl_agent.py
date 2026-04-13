@@ -4,12 +4,10 @@ import torch.optim as optim
 import numpy as np
 
 
-# ==========================================
-# 1. 核心网络架构
-# ==========================================
 class DiffusionMLP(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=256):
         super().__init__()
+        # 【防拥塞重构 4】完全自适应 state_dim 维度，不锁死任何参数
         self.net = nn.Sequential(
             nn.Linear(state_dim + action_dim + 1, hidden_dim),
             nn.LayerNorm(hidden_dim),
@@ -64,9 +62,6 @@ class CentralizedCritic(nn.Module):
         return self.net(x)
 
 
-# ==========================================
-# 2. 算法核心控制系统
-# ==========================================
 class MADiffusionRLSystem:
     def __init__(self, num_agents_train, obs_dim, action_dim):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -77,14 +72,12 @@ class MADiffusionRLSystem:
         self.critic_opt = optim.Adam(self.critic.parameters(), lr=1e-3)
 
     def update_lr(self, lr_actor, lr_critic):
-        """【新增】支持动态学习率退火，防止晚期灾难性遗忘"""
         for param_group in self.actor_opt.param_groups:
             param_group['lr'] = lr_actor
         for param_group in self.critic_opt.param_groups:
             param_group['lr'] = lr_critic
 
     def select_actions(self, obs_dict, explore=True, noise_scale=0.1):
-        """【新增】支持动态噪声衰减，确保后期收敛"""
         agent_ids = list(obs_dict.keys())
         obs_tensor = torch.FloatTensor(np.array([obs_dict[aid] for aid in agent_ids])).to(self.device)
 
@@ -112,7 +105,6 @@ class MADiffusionRLSystem:
 
         g_reward = torch.FloatTensor([[scaled_reward]]).view(-1, 1).to(self.device)
 
-        # --- 1. 更新 Central Critic ---
         q_val = self.critic(g_obs, g_acts).view(-1, 1)
         critic_loss = nn.functional.mse_loss(q_val, g_reward)
 
@@ -121,7 +113,6 @@ class MADiffusionRLSystem:
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_opt.step()
 
-        # --- 2. 更新 Diffusion Actor ---
         new_acts = self.actor.sample_action(obs_tensor)
         new_g_acts = new_acts.view(1, -1)
 
