@@ -1,0 +1,306 @@
+[2026-04-14 13:18:23] ============================================================
+[2026-04-14 13:18:23] 🚀 毕业设计：面向视觉大模型(LVM)的推理与任务卸载联合优化
+[2026-04-14 13:18:23] ============================================================
+[2026-04-14 13:18:23] 
+==================================================
+[2026-04-14 13:18:23] 🌐 正在进入网络规模 A 独立实验组
+[2026-04-14 13:18:23] ==================================================
+[2026-04-14 13:18:23] 
+🚀 开始在 Env A (规模: 2ES, 10UE) 独立训练/测试 MA-Diffusion-RL ...
+[2026-04-14 13:19:32]   └─ Ep 100/1500 | Sys Rwd: 381.91 | Latency: 4.390s | Energy: 311.6J | Avg MD-VQM: 15.87
+[2026-04-14 13:20:42]   └─ Ep 200/1500 | Sys Rwd: 413.06 | Latency: 3.648s | Energy: 202.8J | Avg MD-VQM: 16.21
+[2026-04-14 13:21:54]   └─ Ep 300/1500 | Sys Rwd: 458.36 | Latency: 2.648s | Energy: 221.7J | Avg MD-VQM: 17.50
+[2026-04-14 13:23:07]   └─ Ep 400/1500 | Sys Rwd: 478.60 | Latency: 2.221s | Energy: 249.3J | Avg MD-VQM: 17.87
+[2026-04-14 13:24:21]   └─ Ep 500/1500 | Sys Rwd: 496.00 | Latency: 1.820s | Energy: 275.7J | Avg MD-VQM: 18.09
+[2026-04-14 13:25:35]   └─ Ep 600/1500 | Sys Rwd: 494.00 | Latency: 1.520s | Energy: 325.5J | Avg MD-VQM: 17.95
+[2026-04-14 13:26:47]   └─ Ep 700/1500 | Sys Rwd: 496.00 | Latency: 1.746s | Energy: 384.6J | Avg MD-VQM: 18.21
+[2026-04-14 13:27:58]   └─ Ep 800/1500 | Sys Rwd: 500.00 | Latency: 1.699s | Energy: 304.8J | Avg MD-VQM: 18.14
+[2026-04-14 13:29:09]   └─ Ep 900/1500 | Sys Rwd: 494.00 | Latency: 1.916s | Energy: 219.6J | Avg MD-VQM: 18.31
+[2026-04-14 13:30:21]   └─ Ep 1000/1500 | Sys Rwd: 496.00 | Latency: 1.592s | Energy: 242.6J | Avg MD-VQM: 17.96
+[2026-04-14 13:31:34]   └─ Ep 1100/1500 | Sys Rwd: 496.40 | Latency: 1.606s | Energy: 228.3J | Avg MD-VQM: 17.64
+[2026-04-14 13:32:55]   └─ Ep 1200/1500 | Sys Rwd: 500.00 | Latency: 1.444s | Energy: 219.6J | Avg MD-VQM: 17.71
+[2026-04-14 13:34:12]   └─ Ep 1300/1500 | Sys Rwd: 498.00 | Latency: 1.573s | Energy: 238.4J | Avg MD-VQM: 17.94
+[2026-04-14 13:36:18]   └─ Ep 1400/1500 | Sys Rwd: 500.00 | Latency: 1.515s | Energy: 207.8J | Avg MD-VQM: 17.99
+[2026-04-14 13:38:41]   └─ Ep 1500/1500 | Sys Rwd: 498.00 | Latency: 1.498s | Energy: 242.4J | Avg MD-VQM: 18.06
+[2026-04-14 13:38:41]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 13:38:41]   ✅ 最终稳定表现 -> Reward: 500.00 | Latency: 1.92s | Energy: 330.1J | Avg MD-VQM: 18.32
+[2026-04-14 13:38:41] 
+🚀 开始在 Env A (规模: 2ES, 10UE) 独立训练/测试 MAPPO ...
+[2026-04-14 13:38:49]   └─ Ep 100/1500 | Sys Rwd: 447.23 | Latency: 2.215s | Energy: 364.4J | Avg MD-VQM: 16.02
+[2026-04-14 13:38:56]   └─ Ep 200/1500 | Sys Rwd: 453.03 | Latency: 2.286s | Energy: 320.5J | Avg MD-VQM: 15.86
+[2026-04-14 13:39:04]   └─ Ep 300/1500 | Sys Rwd: 470.58 | Latency: 1.114s | Energy: 307.3J | Avg MD-VQM: 16.03
+[2026-04-14 13:39:11]   └─ Ep 400/1500 | Sys Rwd: 446.71 | Latency: 2.277s | Energy: 214.9J | Avg MD-VQM: 15.49
+[2026-04-14 13:39:19]   └─ Ep 500/1500 | Sys Rwd: 453.77 | Latency: 2.058s | Energy: 237.1J | Avg MD-VQM: 15.41
+[2026-04-14 13:39:26]   └─ Ep 600/1500 | Sys Rwd: 444.50 | Latency: 1.965s | Energy: 276.5J | Avg MD-VQM: 15.21
+[2026-04-14 13:39:34]   └─ Ep 700/1500 | Sys Rwd: 394.18 | Latency: 3.023s | Energy: 327.1J | Avg MD-VQM: 14.15
+[2026-04-14 13:39:41]   └─ Ep 800/1500 | Sys Rwd: 447.72 | Latency: 1.395s | Energy: 212.6J | Avg MD-VQM: 14.72
+[2026-04-14 13:39:48]   └─ Ep 900/1500 | Sys Rwd: 452.39 | Latency: 0.964s | Energy: 239.4J | Avg MD-VQM: 14.80
+[2026-04-14 13:39:56]   └─ Ep 1000/1500 | Sys Rwd: 428.19 | Latency: 1.664s | Energy: 290.8J | Avg MD-VQM: 14.21
+[2026-04-14 13:40:03]   └─ Ep 1100/1500 | Sys Rwd: 441.69 | Latency: 1.365s | Energy: 120.1J | Avg MD-VQM: 14.22
+[2026-04-14 13:40:11]   └─ Ep 1200/1500 | Sys Rwd: 441.99 | Latency: 1.153s | Energy: 154.0J | Avg MD-VQM: 14.26
+[2026-04-14 13:40:18]   └─ Ep 1300/1500 | Sys Rwd: 442.62 | Latency: 1.134s | Energy: 164.2J | Avg MD-VQM: 14.28
+[2026-04-14 13:40:26]   └─ Ep 1400/1500 | Sys Rwd: 437.50 | Latency: 1.462s | Energy: 129.9J | Avg MD-VQM: 14.03
+[2026-04-14 13:40:33]   └─ Ep 1500/1500 | Sys Rwd: 438.99 | Latency: 1.257s | Energy: 172.1J | Avg MD-VQM: 14.07
+[2026-04-14 13:40:33]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 13:40:33]   ✅ 最终稳定表现 -> Reward: 500.00 | Latency: 1.90s | Energy: 556.6J | Avg MD-VQM: 18.78
+[2026-04-14 13:40:33] 
+🚀 开始在 Env A (规模: 2ES, 10UE) 独立训练/测试 Greedy ...
+[2026-04-14 13:40:35]   └─ Ep 100/1500 | Sys Rwd: 13.80 | Latency: 14.777s | Energy: 55.5J | Avg MD-VQM: 9.65
+[2026-04-14 13:40:36]   └─ Ep 200/1500 | Sys Rwd: 18.80 | Latency: 14.643s | Energy: 54.9J | Avg MD-VQM: 9.75
+[2026-04-14 13:40:37]   └─ Ep 300/1500 | Sys Rwd: 22.40 | Latency: 14.547s | Energy: 58.2J | Avg MD-VQM: 9.81
+[2026-04-14 13:40:39]   └─ Ep 400/1500 | Sys Rwd: 17.60 | Latency: 14.674s | Energy: 56.3J | Avg MD-VQM: 9.72
+[2026-04-14 13:40:40]   └─ Ep 500/1500 | Sys Rwd: 15.80 | Latency: 14.726s | Energy: 55.2J | Avg MD-VQM: 9.69
+[2026-04-14 13:40:41]   └─ Ep 600/1500 | Sys Rwd: 16.60 | Latency: 14.704s | Energy: 56.7J | Avg MD-VQM: 9.70
+[2026-04-14 13:40:43]   └─ Ep 700/1500 | Sys Rwd: 15.80 | Latency: 14.724s | Energy: 55.6J | Avg MD-VQM: 9.69
+[2026-04-14 13:40:44]   └─ Ep 800/1500 | Sys Rwd: 19.40 | Latency: 14.628s | Energy: 54.7J | Avg MD-VQM: 9.76
+[2026-04-14 13:40:45]   └─ Ep 900/1500 | Sys Rwd: 18.00 | Latency: 14.661s | Energy: 55.1J | Avg MD-VQM: 9.73
+[2026-04-14 13:40:47]   └─ Ep 1000/1500 | Sys Rwd: 14.60 | Latency: 14.755s | Energy: 53.6J | Avg MD-VQM: 9.67
+[2026-04-14 13:40:48]   └─ Ep 1100/1500 | Sys Rwd: 13.60 | Latency: 14.787s | Energy: 55.4J | Avg MD-VQM: 9.65
+[2026-04-14 13:40:49]   └─ Ep 1200/1500 | Sys Rwd: 17.00 | Latency: 14.688s | Energy: 55.9J | Avg MD-VQM: 9.71
+[2026-04-14 13:40:50]   └─ Ep 1300/1500 | Sys Rwd: 16.00 | Latency: 14.719s | Energy: 55.4J | Avg MD-VQM: 9.69
+[2026-04-14 13:40:52]   └─ Ep 1400/1500 | Sys Rwd: 12.80 | Latency: 14.807s | Energy: 54.1J | Avg MD-VQM: 9.63
+[2026-04-14 13:40:53]   └─ Ep 1500/1500 | Sys Rwd: 10.00 | Latency: 14.885s | Energy: 54.1J | Avg MD-VQM: 9.58
+[2026-04-14 13:40:53]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 13:40:53]   ✅ 最终稳定表现 -> Reward: 20.00 | Latency: 14.61s | Energy: 57.7J | Avg MD-VQM: 9.77
+[2026-04-14 13:40:53] 
+🚀 开始在 Env A (规模: 2ES, 10UE) 独立训练/测试 Random ...
+[2026-04-14 13:40:54]   └─ Ep 100/1500 | Sys Rwd: 455.16 | Latency: 0.777s | Energy: 143.3J | Avg MD-VQM: 13.27
+[2026-04-14 13:40:56]   └─ Ep 200/1500 | Sys Rwd: 455.53 | Latency: 0.781s | Energy: 160.6J | Avg MD-VQM: 13.33
+[2026-04-14 13:40:57]   └─ Ep 300/1500 | Sys Rwd: 456.89 | Latency: 0.792s | Energy: 159.6J | Avg MD-VQM: 13.35
+[2026-04-14 13:40:58]   └─ Ep 400/1500 | Sys Rwd: 456.01 | Latency: 0.821s | Energy: 155.9J | Avg MD-VQM: 13.39
+[2026-04-14 13:40:59]   └─ Ep 500/1500 | Sys Rwd: 456.10 | Latency: 0.808s | Energy: 145.4J | Avg MD-VQM: 13.33
+[2026-04-14 13:41:01]   └─ Ep 600/1500 | Sys Rwd: 454.38 | Latency: 0.774s | Energy: 155.4J | Avg MD-VQM: 13.19
+[2026-04-14 13:41:02]   └─ Ep 700/1500 | Sys Rwd: 455.30 | Latency: 0.814s | Energy: 166.6J | Avg MD-VQM: 13.33
+[2026-04-14 13:41:03]   └─ Ep 800/1500 | Sys Rwd: 453.68 | Latency: 0.824s | Energy: 151.5J | Avg MD-VQM: 13.20
+[2026-04-14 13:41:04]   └─ Ep 900/1500 | Sys Rwd: 456.57 | Latency: 0.805s | Energy: 165.4J | Avg MD-VQM: 13.38
+[2026-04-14 13:41:06]   └─ Ep 1000/1500 | Sys Rwd: 457.26 | Latency: 0.832s | Energy: 154.0J | Avg MD-VQM: 13.42
+[2026-04-14 13:41:07]   └─ Ep 1100/1500 | Sys Rwd: 456.86 | Latency: 0.798s | Energy: 167.6J | Avg MD-VQM: 13.39
+[2026-04-14 13:41:08]   └─ Ep 1200/1500 | Sys Rwd: 456.18 | Latency: 0.790s | Energy: 155.2J | Avg MD-VQM: 13.35
+[2026-04-14 13:41:09]   └─ Ep 1300/1500 | Sys Rwd: 457.40 | Latency: 0.786s | Energy: 157.0J | Avg MD-VQM: 13.41
+[2026-04-14 13:41:10]   └─ Ep 1400/1500 | Sys Rwd: 456.17 | Latency: 0.785s | Energy: 164.2J | Avg MD-VQM: 13.33
+[2026-04-14 13:41:12]   └─ Ep 1500/1500 | Sys Rwd: 454.77 | Latency: 0.788s | Energy: 167.5J | Avg MD-VQM: 13.26
+[2026-04-14 13:41:12]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 13:41:12]   ✅ 最终稳定表现 -> Reward: 455.63 | Latency: 0.88s | Energy: 157.4J | Avg MD-VQM: 13.43
+[2026-04-14 13:41:12] 
+🚀 开始在 Env A (规模: 2ES, 10UE) 独立训练/测试 LocalOnly ...
+[2026-04-14 13:41:13]   └─ Ep 100/1500 | Sys Rwd: 318.10 | Latency: 0.867s | Energy: 7.4J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:14]   └─ Ep 200/1500 | Sys Rwd: 318.06 | Latency: 0.870s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:15]   └─ Ep 300/1500 | Sys Rwd: 318.14 | Latency: 0.865s | Energy: 7.2J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:17]   └─ Ep 400/1500 | Sys Rwd: 318.20 | Latency: 0.860s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:18]   └─ Ep 500/1500 | Sys Rwd: 318.17 | Latency: 0.862s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:19]   └─ Ep 600/1500 | Sys Rwd: 318.06 | Latency: 0.870s | Energy: 7.2J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:20]   └─ Ep 700/1500 | Sys Rwd: 318.11 | Latency: 0.867s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:21]   └─ Ep 800/1500 | Sys Rwd: 318.04 | Latency: 0.872s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:22]   └─ Ep 900/1500 | Sys Rwd: 318.04 | Latency: 0.872s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:24]   └─ Ep 1000/1500 | Sys Rwd: 318.11 | Latency: 0.867s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:25]   └─ Ep 1100/1500 | Sys Rwd: 318.08 | Latency: 0.869s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:27]   └─ Ep 1200/1500 | Sys Rwd: 318.23 | Latency: 0.858s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:28]   └─ Ep 1300/1500 | Sys Rwd: 318.17 | Latency: 0.862s | Energy: 7.2J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:29]   └─ Ep 1400/1500 | Sys Rwd: 318.01 | Latency: 0.874s | Energy: 7.4J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:30]   └─ Ep 1500/1500 | Sys Rwd: 318.18 | Latency: 0.862s | Energy: 7.3J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:30]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 13:41:30]   ✅ 最终稳定表现 -> Reward: 318.01 | Latency: 0.87s | Energy: 7.2J | Avg MD-VQM: 6.59
+[2026-04-14 13:41:30] 
+==================================================
+[2026-04-14 13:41:30] 🌐 正在进入网络规模 B 独立实验组
+[2026-04-14 13:41:30] ==================================================
+[2026-04-14 13:41:30] 
+🚀 开始在 Env B (规模: 5ES, 25UE) 独立训练/测试 MA-Diffusion-RL ...
+[2026-04-14 13:45:12]   └─ Ep 100/1500 | Sys Rwd: 1209.00 | Latency: 2.214s | Energy: 6267.7J | Avg MD-VQM: 18.48
+[2026-04-14 13:47:52]   └─ Ep 200/1500 | Sys Rwd: 1217.00 | Latency: 1.494s | Energy: 3070.8J | Avg MD-VQM: 18.54
+[2026-04-14 13:50:34]   └─ Ep 300/1500 | Sys Rwd: 1243.40 | Latency: 1.357s | Energy: 3877.5J | Avg MD-VQM: 18.73
+[2026-04-14 13:53:20]   └─ Ep 400/1500 | Sys Rwd: 1246.80 | Latency: 1.333s | Energy: 4108.7J | Avg MD-VQM: 18.76
+[2026-04-14 13:56:04]   └─ Ep 500/1500 | Sys Rwd: 1250.00 | Latency: 1.266s | Energy: 3116.7J | Avg MD-VQM: 18.78
+[2026-04-14 13:58:47]   └─ Ep 600/1500 | Sys Rwd: 1250.00 | Latency: 1.253s | Energy: 3367.1J | Avg MD-VQM: 18.78
+[2026-04-14 14:01:29]   └─ Ep 700/1500 | Sys Rwd: 1250.00 | Latency: 1.356s | Energy: 4881.1J | Avg MD-VQM: 18.78
+[2026-04-14 14:04:12]   └─ Ep 800/1500 | Sys Rwd: 1250.00 | Latency: 1.651s | Energy: 4788.0J | Avg MD-VQM: 18.78
+[2026-04-14 14:06:54]   └─ Ep 900/1500 | Sys Rwd: 1250.00 | Latency: 1.395s | Energy: 3961.4J | Avg MD-VQM: 18.78
+[2026-04-14 14:09:36]   └─ Ep 1000/1500 | Sys Rwd: 1250.00 | Latency: 1.320s | Energy: 4184.7J | Avg MD-VQM: 18.78
+[2026-04-14 14:12:18]   └─ Ep 1100/1500 | Sys Rwd: 1247.20 | Latency: 1.402s | Energy: 5020.2J | Avg MD-VQM: 18.76
+[2026-04-14 14:15:02]   └─ Ep 1200/1500 | Sys Rwd: 1250.00 | Latency: 1.398s | Energy: 4398.5J | Avg MD-VQM: 18.78
+[2026-04-14 14:17:50]   └─ Ep 1300/1500 | Sys Rwd: 1250.00 | Latency: 1.508s | Energy: 5648.7J | Avg MD-VQM: 18.78
+[2026-04-14 14:20:37]   └─ Ep 1400/1500 | Sys Rwd: 1247.00 | Latency: 1.521s | Energy: 5736.1J | Avg MD-VQM: 18.76
+[2026-04-14 14:23:29]   └─ Ep 1500/1500 | Sys Rwd: 1246.60 | Latency: 1.500s | Energy: 5266.9J | Avg MD-VQM: 18.76
+[2026-04-14 14:23:29]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 14:23:30]   ✅ 最终稳定表现 -> Reward: 1250.00 | Latency: 1.70s | Energy: 2944.9J | Avg MD-VQM: 18.78
+[2026-04-14 14:23:30] 
+🚀 开始在 Env B (规模: 5ES, 25UE) 独立训练/测试 MAPPO ...
+[2026-04-14 14:23:36]   └─ Ep 100/1500 | Sys Rwd: 1208.85 | Latency: 1.438s | Energy: 2002.0J | Avg MD-VQM: 16.59
+[2026-04-14 14:23:42]   └─ Ep 200/1500 | Sys Rwd: 1200.33 | Latency: 0.681s | Energy: 2412.0J | Avg MD-VQM: 16.30
+[2026-04-14 14:23:47]   └─ Ep 300/1500 | Sys Rwd: 1182.98 | Latency: 1.216s | Energy: 3172.6J | Avg MD-VQM: 16.00
+[2026-04-14 14:23:53]   └─ Ep 400/1500 | Sys Rwd: 1180.10 | Latency: 1.263s | Energy: 2003.5J | Avg MD-VQM: 15.89
+[2026-04-14 14:23:58]   └─ Ep 500/1500 | Sys Rwd: 1167.92 | Latency: 0.709s | Energy: 1796.7J | Avg MD-VQM: 15.57
+[2026-04-14 14:24:04]   └─ Ep 600/1500 | Sys Rwd: 1152.31 | Latency: 1.114s | Energy: 2014.7J | Avg MD-VQM: 15.23
+[2026-04-14 14:24:10]   └─ Ep 700/1500 | Sys Rwd: 1140.10 | Latency: 1.018s | Energy: 1981.9J | Avg MD-VQM: 14.97
+[2026-04-14 14:24:15]   └─ Ep 800/1500 | Sys Rwd: 1128.41 | Latency: 1.211s | Energy: 1051.6J | Avg MD-VQM: 14.72
+[2026-04-14 14:24:21]   └─ Ep 900/1500 | Sys Rwd: 1119.43 | Latency: 0.633s | Energy: 1696.0J | Avg MD-VQM: 14.54
+[2026-04-14 14:24:27]   └─ Ep 1000/1500 | Sys Rwd: 1110.61 | Latency: 0.575s | Energy: 2019.9J | Avg MD-VQM: 14.34
+[2026-04-14 14:24:32]   └─ Ep 1100/1500 | Sys Rwd: 1104.02 | Latency: 0.608s | Energy: 1982.9J | Avg MD-VQM: 14.19
+[2026-04-14 14:24:38]   └─ Ep 1200/1500 | Sys Rwd: 1098.20 | Latency: 0.686s | Energy: 2419.8J | Avg MD-VQM: 14.09
+[2026-04-14 14:24:44]   └─ Ep 1300/1500 | Sys Rwd: 1096.67 | Latency: 0.587s | Energy: 1518.9J | Avg MD-VQM: 14.03
+[2026-04-14 14:24:49]   └─ Ep 1400/1500 | Sys Rwd: 1094.06 | Latency: 0.589s | Energy: 1559.0J | Avg MD-VQM: 13.97
+[2026-04-14 14:24:55]   └─ Ep 1500/1500 | Sys Rwd: 1093.35 | Latency: 0.604s | Energy: 1697.6J | Avg MD-VQM: 13.96
+[2026-04-14 14:24:55]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 14:24:55]   ✅ 最终稳定表现 -> Reward: 1250.00 | Latency: 2.85s | Energy: 5205.6J | Avg MD-VQM: 18.78
+[2026-04-14 14:24:55] 
+🚀 开始在 Env B (规模: 5ES, 25UE) 独立训练/测试 Greedy ...
+[2026-04-14 14:24:57]   └─ Ep 100/1500 | Sys Rwd: 1176.80 | Latency: 2.141s | Energy: 2022.3J | Avg MD-VQM: 18.23
+[2026-04-14 14:24:59]   └─ Ep 200/1500 | Sys Rwd: 1128.80 | Latency: 2.676s | Energy: 1930.9J | Avg MD-VQM: 17.87
+[2026-04-14 14:25:01]   └─ Ep 300/1500 | Sys Rwd: 1099.80 | Latency: 3.037s | Energy: 1809.1J | Avg MD-VQM: 17.66
+[2026-04-14 14:25:03]   └─ Ep 400/1500 | Sys Rwd: 1095.00 | Latency: 3.085s | Energy: 1767.9J | Avg MD-VQM: 17.62
+[2026-04-14 14:25:05]   └─ Ep 500/1500 | Sys Rwd: 1131.40 | Latency: 2.668s | Energy: 1883.7J | Avg MD-VQM: 17.89
+[2026-04-14 14:25:06]   └─ Ep 600/1500 | Sys Rwd: 1126.60 | Latency: 2.725s | Energy: 1878.1J | Avg MD-VQM: 17.86
+[2026-04-14 14:25:08]   └─ Ep 700/1500 | Sys Rwd: 1020.20 | Latency: 3.942s | Energy: 1562.3J | Avg MD-VQM: 17.06
+[2026-04-14 14:25:10]   └─ Ep 800/1500 | Sys Rwd: 1100.00 | Latency: 3.063s | Energy: 1715.6J | Avg MD-VQM: 17.66
+[2026-04-14 14:25:12]   └─ Ep 900/1500 | Sys Rwd: 1175.40 | Latency: 2.176s | Energy: 1980.9J | Avg MD-VQM: 18.22
+[2026-04-14 14:25:14]   └─ Ep 1000/1500 | Sys Rwd: 1117.00 | Latency: 2.844s | Energy: 1753.3J | Avg MD-VQM: 17.78
+[2026-04-14 14:25:16]   └─ Ep 1100/1500 | Sys Rwd: 1121.20 | Latency: 2.813s | Energy: 1671.8J | Avg MD-VQM: 17.82
+[2026-04-14 14:25:18]   └─ Ep 1200/1500 | Sys Rwd: 1133.80 | Latency: 2.632s | Energy: 1856.6J | Avg MD-VQM: 17.91
+[2026-04-14 14:25:20]   └─ Ep 1300/1500 | Sys Rwd: 1049.00 | Latency: 3.614s | Energy: 1598.8J | Avg MD-VQM: 17.27
+[2026-04-14 14:25:21]   └─ Ep 1400/1500 | Sys Rwd: 1117.80 | Latency: 2.827s | Energy: 1825.4J | Avg MD-VQM: 17.79
+[2026-04-14 14:25:23]   └─ Ep 1500/1500 | Sys Rwd: 1100.00 | Latency: 3.039s | Energy: 1758.5J | Avg MD-VQM: 17.66
+[2026-04-14 14:25:23]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 14:25:24]   ✅ 最终稳定表现 -> Reward: 1172.00 | Latency: 2.18s | Energy: 2152.7J | Avg MD-VQM: 18.20
+[2026-04-14 14:25:24] 
+🚀 开始在 Env B (规模: 5ES, 25UE) 独立训练/测试 Random ...
+[2026-04-14 14:25:25]   └─ Ep 100/1500 | Sys Rwd: 1139.75 | Latency: 0.585s | Energy: 910.5J | Avg MD-VQM: 13.32
+[2026-04-14 14:25:27]   └─ Ep 200/1500 | Sys Rwd: 1141.75 | Latency: 0.603s | Energy: 948.3J | Avg MD-VQM: 13.40
+[2026-04-14 14:25:29]   └─ Ep 300/1500 | Sys Rwd: 1142.16 | Latency: 0.591s | Energy: 891.4J | Avg MD-VQM: 13.36
+[2026-04-14 14:25:30]   └─ Ep 400/1500 | Sys Rwd: 1139.60 | Latency: 0.594s | Energy: 926.0J | Avg MD-VQM: 13.29
+[2026-04-14 14:25:32]   └─ Ep 500/1500 | Sys Rwd: 1142.94 | Latency: 0.596s | Energy: 918.6J | Avg MD-VQM: 13.38
+[2026-04-14 14:25:34]   └─ Ep 600/1500 | Sys Rwd: 1142.43 | Latency: 0.577s | Energy: 960.7J | Avg MD-VQM: 13.35
+[2026-04-14 14:25:36]   └─ Ep 700/1500 | Sys Rwd: 1141.80 | Latency: 0.583s | Energy: 937.9J | Avg MD-VQM: 13.34
+[2026-04-14 14:25:37]   └─ Ep 800/1500 | Sys Rwd: 1140.40 | Latency: 0.585s | Energy: 913.5J | Avg MD-VQM: 13.32
+[2026-04-14 14:25:39]   └─ Ep 900/1500 | Sys Rwd: 1139.69 | Latency: 0.592s | Energy: 930.4J | Avg MD-VQM: 13.32
+[2026-04-14 14:25:41]   └─ Ep 1000/1500 | Sys Rwd: 1141.40 | Latency: 0.587s | Energy: 917.8J | Avg MD-VQM: 13.35
+[2026-04-14 14:25:43]   └─ Ep 1100/1500 | Sys Rwd: 1139.41 | Latency: 0.598s | Energy: 899.1J | Avg MD-VQM: 13.29
+[2026-04-14 14:25:45]   └─ Ep 1200/1500 | Sys Rwd: 1141.99 | Latency: 0.597s | Energy: 919.3J | Avg MD-VQM: 13.36
+[2026-04-14 14:25:46]   └─ Ep 1300/1500 | Sys Rwd: 1142.81 | Latency: 0.588s | Energy: 950.1J | Avg MD-VQM: 13.39
+[2026-04-14 14:25:48]   └─ Ep 1400/1500 | Sys Rwd: 1141.10 | Latency: 0.586s | Energy: 912.7J | Avg MD-VQM: 13.34
+[2026-04-14 14:25:50]   └─ Ep 1500/1500 | Sys Rwd: 1139.08 | Latency: 0.574s | Energy: 895.9J | Avg MD-VQM: 13.30
+[2026-04-14 14:25:50]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 14:25:50]   ✅ 最终稳定表现 -> Reward: 1139.00 | Latency: 0.58s | Energy: 899.9J | Avg MD-VQM: 13.28
+[2026-04-14 14:25:50] 
+🚀 开始在 Env B (规模: 5ES, 25UE) 独立训练/测试 LocalOnly ...
+[2026-04-14 14:25:52]   └─ Ep 100/1500 | Sys Rwd: 795.13 | Latency: 0.871s | Energy: 18.3J | Avg MD-VQM: 6.59
+[2026-04-14 14:25:53]   └─ Ep 200/1500 | Sys Rwd: 795.09 | Latency: 0.872s | Energy: 18.3J | Avg MD-VQM: 6.59
+[2026-04-14 14:25:55]   └─ Ep 300/1500 | Sys Rwd: 795.51 | Latency: 0.860s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:25:57]   └─ Ep 400/1500 | Sys Rwd: 795.34 | Latency: 0.865s | Energy: 18.1J | Avg MD-VQM: 6.59
+[2026-04-14 14:25:58]   └─ Ep 500/1500 | Sys Rwd: 795.35 | Latency: 0.864s | Energy: 18.4J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:00]   └─ Ep 600/1500 | Sys Rwd: 795.29 | Latency: 0.866s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:01]   └─ Ep 700/1500 | Sys Rwd: 795.46 | Latency: 0.861s | Energy: 18.3J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:03]   └─ Ep 800/1500 | Sys Rwd: 795.34 | Latency: 0.865s | Energy: 18.3J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:05]   └─ Ep 900/1500 | Sys Rwd: 795.53 | Latency: 0.859s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:06]   └─ Ep 1000/1500 | Sys Rwd: 795.17 | Latency: 0.870s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:08]   └─ Ep 1100/1500 | Sys Rwd: 795.17 | Latency: 0.870s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:10]   └─ Ep 1200/1500 | Sys Rwd: 795.17 | Latency: 0.870s | Energy: 18.3J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:11]   └─ Ep 1300/1500 | Sys Rwd: 795.38 | Latency: 0.863s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:13]   └─ Ep 1400/1500 | Sys Rwd: 795.28 | Latency: 0.866s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:15]   └─ Ep 1500/1500 | Sys Rwd: 795.27 | Latency: 0.867s | Energy: 18.2J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:15]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 14:26:15]   ✅ 最终稳定表现 -> Reward: 795.11 | Latency: 0.87s | Energy: 18.3J | Avg MD-VQM: 6.59
+[2026-04-14 14:26:15] 
+==================================================
+[2026-04-14 14:26:15] 🌐 正在进入网络规模 C 独立实验组
+[2026-04-14 14:26:15] ==================================================
+[2026-04-14 14:26:15] 
+🚀 开始在 Env C (规模: 10ES, 50UE) 独立训练/测试 MA-Diffusion-RL ...
+[2026-04-14 14:31:38]   └─ Ep 100/1500 | Sys Rwd: 2500.00 | Latency: 2.686s | Energy: 5208.1J | Avg MD-VQM: 18.78
+[2026-04-14 14:37:29]   └─ Ep 200/1500 | Sys Rwd: 2500.00 | Latency: 2.258s | Energy: 15501.9J | Avg MD-VQM: 18.78
+[2026-04-14 14:43:32]   └─ Ep 300/1500 | Sys Rwd: 2500.00 | Latency: 2.162s | Energy: 15773.6J | Avg MD-VQM: 18.78
+[2026-04-14 14:49:52]   └─ Ep 400/1500 | Sys Rwd: 2500.00 | Latency: 2.522s | Energy: 18987.7J | Avg MD-VQM: 18.78
+[2026-04-14 14:55:44]   └─ Ep 500/1500 | Sys Rwd: 2500.00 | Latency: 2.607s | Energy: 21932.8J | Avg MD-VQM: 18.78
+[2026-04-14 15:01:48]   └─ Ep 600/1500 | Sys Rwd: 2500.00 | Latency: 2.509s | Energy: 15013.8J | Avg MD-VQM: 18.78
+[2026-04-14 15:07:37]   └─ Ep 700/1500 | Sys Rwd: 2500.00 | Latency: 2.402s | Energy: 17913.2J | Avg MD-VQM: 18.78
+[2026-04-14 15:13:22]   └─ Ep 800/1500 | Sys Rwd: 2500.00 | Latency: 2.417s | Energy: 11779.1J | Avg MD-VQM: 18.78
+[2026-04-14 15:19:06]   └─ Ep 900/1500 | Sys Rwd: 2500.00 | Latency: 1.973s | Energy: 14191.1J | Avg MD-VQM: 18.78
+[2026-04-14 15:24:54]   └─ Ep 1000/1500 | Sys Rwd: 2500.00 | Latency: 2.084s | Energy: 14311.7J | Avg MD-VQM: 18.78
+[2026-04-14 15:30:40]   └─ Ep 1100/1500 | Sys Rwd: 2500.00 | Latency: 2.192s | Energy: 14029.4J | Avg MD-VQM: 18.78
+[2026-04-14 15:36:24]   └─ Ep 1200/1500 | Sys Rwd: 2500.00 | Latency: 2.058s | Energy: 16184.8J | Avg MD-VQM: 18.78
+[2026-04-14 15:42:12]   └─ Ep 1300/1500 | Sys Rwd: 2500.00 | Latency: 1.791s | Energy: 13538.6J | Avg MD-VQM: 18.78
+[2026-04-14 15:47:56]   └─ Ep 1400/1500 | Sys Rwd: 2500.00 | Latency: 1.839s | Energy: 12893.5J | Avg MD-VQM: 18.78
+[2026-04-14 15:53:43]   └─ Ep 1500/1500 | Sys Rwd: 2500.00 | Latency: 1.710s | Energy: 12207.1J | Avg MD-VQM: 18.78
+[2026-04-14 15:53:43]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 15:53:44]   ✅ 最终稳定表现 -> Reward: 2500.00 | Latency: 3.85s | Energy: 22524.5J | Avg MD-VQM: 18.78
+[2026-04-14 15:53:44] 
+🚀 开始在 Env C (规模: 10ES, 50UE) 独立训练/测试 MAPPO ...
+[2026-04-14 15:53:54]   └─ Ep 100/1500 | Sys Rwd: 1904.18 | Latency: 0.658s | Energy: 2627.6J | Avg MD-VQM: 9.45
+[2026-04-14 15:54:04]   └─ Ep 200/1500 | Sys Rwd: 1918.05 | Latency: 0.483s | Energy: 2655.6J | Avg MD-VQM: 9.63
+[2026-04-14 15:54:14]   └─ Ep 300/1500 | Sys Rwd: 1936.97 | Latency: 0.599s | Energy: 1895.5J | Avg MD-VQM: 9.96
+[2026-04-14 15:54:24]   └─ Ep 400/1500 | Sys Rwd: 1951.30 | Latency: 0.576s | Energy: 2289.3J | Avg MD-VQM: 10.19
+[2026-04-14 15:54:35]   └─ Ep 500/1500 | Sys Rwd: 1951.25 | Latency: 0.752s | Energy: 4741.2J | Avg MD-VQM: 10.37
+[2026-04-14 15:54:45]   └─ Ep 600/1500 | Sys Rwd: 1966.02 | Latency: 0.707s | Energy: 3334.5J | Avg MD-VQM: 10.60
+[2026-04-14 15:54:55]   └─ Ep 700/1500 | Sys Rwd: 1990.70 | Latency: 0.531s | Energy: 2537.1J | Avg MD-VQM: 10.95
+[2026-04-14 15:55:05]   └─ Ep 800/1500 | Sys Rwd: 1997.34 | Latency: 0.572s | Energy: 2290.4J | Avg MD-VQM: 11.12
+[2026-04-14 15:55:16]   └─ Ep 900/1500 | Sys Rwd: 2009.57 | Latency: 0.459s | Energy: 2589.7J | Avg MD-VQM: 11.35
+[2026-04-14 15:55:26]   └─ Ep 1000/1500 | Sys Rwd: 2005.24 | Latency: 0.470s | Energy: 2814.2J | Avg MD-VQM: 11.35
+[2026-04-14 15:55:36]   └─ Ep 1100/1500 | Sys Rwd: 2015.49 | Latency: 0.587s | Energy: 3150.2J | Avg MD-VQM: 11.57
+[2026-04-14 15:55:46]   └─ Ep 1200/1500 | Sys Rwd: 2017.75 | Latency: 0.715s | Energy: 2268.3J | Avg MD-VQM: 11.64
+[2026-04-14 15:55:57]   └─ Ep 1300/1500 | Sys Rwd: 2012.76 | Latency: 0.679s | Energy: 2145.4J | Avg MD-VQM: 11.59
+[2026-04-14 15:56:07]   └─ Ep 1400/1500 | Sys Rwd: 2014.39 | Latency: 0.674s | Energy: 2073.2J | Avg MD-VQM: 11.62
+[2026-04-14 15:56:17]   └─ Ep 1500/1500 | Sys Rwd: 2019.48 | Latency: 0.682s | Energy: 2206.2J | Avg MD-VQM: 11.69
+[2026-04-14 15:56:17]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 15:56:18]   ✅ 最终稳定表现 -> Reward: 1587.48 | Latency: 0.88s | Energy: 1137.3J | Avg MD-VQM: 6.59
+[2026-04-14 15:56:18] 
+🚀 开始在 Env C (规模: 10ES, 50UE) 独立训练/测试 Greedy ...
+[2026-04-14 15:56:23]   └─ Ep 100/1500 | Sys Rwd: 2500.00 | Latency: 1.436s | Energy: 2623.1J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:27]   └─ Ep 200/1500 | Sys Rwd: 2500.00 | Latency: 1.445s | Energy: 2658.6J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:32]   └─ Ep 300/1500 | Sys Rwd: 2500.00 | Latency: 1.440s | Energy: 2668.8J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:37]   └─ Ep 400/1500 | Sys Rwd: 2500.00 | Latency: 1.449s | Energy: 2682.2J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:42]   └─ Ep 500/1500 | Sys Rwd: 2500.00 | Latency: 1.451s | Energy: 2752.8J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:47]   └─ Ep 600/1500 | Sys Rwd: 2500.00 | Latency: 1.438s | Energy: 2623.2J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:51]   └─ Ep 700/1500 | Sys Rwd: 2500.00 | Latency: 1.444s | Energy: 2686.7J | Avg MD-VQM: 18.78
+[2026-04-14 15:56:56]   └─ Ep 800/1500 | Sys Rwd: 2500.00 | Latency: 1.446s | Energy: 2667.7J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:01]   └─ Ep 900/1500 | Sys Rwd: 2500.00 | Latency: 1.445s | Energy: 2691.3J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:06]   └─ Ep 1000/1500 | Sys Rwd: 2500.00 | Latency: 1.452s | Energy: 2807.5J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:10]   └─ Ep 1100/1500 | Sys Rwd: 2500.00 | Latency: 1.453s | Energy: 2772.9J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:15]   └─ Ep 1200/1500 | Sys Rwd: 2500.00 | Latency: 1.449s | Energy: 2727.0J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:20]   └─ Ep 1300/1500 | Sys Rwd: 2500.00 | Latency: 1.446s | Energy: 2715.8J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:25]   └─ Ep 1400/1500 | Sys Rwd: 2500.00 | Latency: 1.449s | Energy: 2758.4J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:29]   └─ Ep 1500/1500 | Sys Rwd: 2500.00 | Latency: 1.444s | Energy: 2706.3J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:29]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 15:57:30]   ✅ 最终稳定表现 -> Reward: 2500.00 | Latency: 1.45s | Energy: 2735.9J | Avg MD-VQM: 18.78
+[2026-04-14 15:57:30] 
+🚀 开始在 Env C (规模: 10ES, 50UE) 独立训练/测试 Random ...
+[2026-04-14 15:57:34]   └─ Ep 100/1500 | Sys Rwd: 2281.95 | Latency: 0.492s | Energy: 2178.1J | Avg MD-VQM: 13.35
+[2026-04-14 15:57:38]   └─ Ep 200/1500 | Sys Rwd: 2281.53 | Latency: 0.487s | Energy: 2104.4J | Avg MD-VQM: 13.32
+[2026-04-14 15:57:42]   └─ Ep 300/1500 | Sys Rwd: 2282.20 | Latency: 0.486s | Energy: 2153.7J | Avg MD-VQM: 13.33
+[2026-04-14 15:57:46]   └─ Ep 400/1500 | Sys Rwd: 2287.33 | Latency: 0.488s | Energy: 2167.3J | Avg MD-VQM: 13.37
+[2026-04-14 15:57:49]   └─ Ep 500/1500 | Sys Rwd: 2284.25 | Latency: 0.498s | Energy: 2218.0J | Avg MD-VQM: 13.35
+[2026-04-14 15:57:53]   └─ Ep 600/1500 | Sys Rwd: 2281.72 | Latency: 0.489s | Energy: 2194.4J | Avg MD-VQM: 13.34
+[2026-04-14 15:57:57]   └─ Ep 700/1500 | Sys Rwd: 2279.39 | Latency: 0.503s | Energy: 2298.3J | Avg MD-VQM: 13.31
+[2026-04-14 15:58:02]   └─ Ep 800/1500 | Sys Rwd: 2284.80 | Latency: 0.488s | Energy: 2188.5J | Avg MD-VQM: 13.35
+[2026-04-14 15:58:07]   └─ Ep 900/1500 | Sys Rwd: 2283.93 | Latency: 0.485s | Energy: 2151.1J | Avg MD-VQM: 13.35
+[2026-04-14 15:58:11]   └─ Ep 1000/1500 | Sys Rwd: 2283.06 | Latency: 0.493s | Energy: 2185.6J | Avg MD-VQM: 13.34
+[2026-04-14 15:58:16]   └─ Ep 1100/1500 | Sys Rwd: 2285.97 | Latency: 0.487s | Energy: 2190.7J | Avg MD-VQM: 13.39
+[2026-04-14 15:58:22]   └─ Ep 1200/1500 | Sys Rwd: 2281.48 | Latency: 0.492s | Energy: 2180.4J | Avg MD-VQM: 13.32
+[2026-04-14 15:58:26]   └─ Ep 1300/1500 | Sys Rwd: 2283.69 | Latency: 0.499s | Energy: 2197.2J | Avg MD-VQM: 13.35
+[2026-04-14 15:58:30]   └─ Ep 1400/1500 | Sys Rwd: 2278.70 | Latency: 0.483s | Energy: 2128.2J | Avg MD-VQM: 13.28
+[2026-04-14 15:58:35]   └─ Ep 1500/1500 | Sys Rwd: 2279.31 | Latency: 0.488s | Energy: 2128.0J | Avg MD-VQM: 13.29
+[2026-04-14 15:58:35]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 15:58:36]   ✅ 最终稳定表现 -> Reward: 2280.62 | Latency: 0.49s | Energy: 2161.9J | Avg MD-VQM: 13.36
+[2026-04-14 15:58:36] 
+🚀 开始在 Env C (规模: 10ES, 50UE) 独立训练/测试 LocalOnly ...
+[2026-04-14 15:58:40]   └─ Ep 100/1500 | Sys Rwd: 1590.60 | Latency: 0.866s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:58:44]   └─ Ep 200/1500 | Sys Rwd: 1590.74 | Latency: 0.864s | Energy: 36.4J | Avg MD-VQM: 6.59
+[2026-04-14 15:58:49]   └─ Ep 300/1500 | Sys Rwd: 1590.76 | Latency: 0.863s | Energy: 36.4J | Avg MD-VQM: 6.59
+[2026-04-14 15:58:53]   └─ Ep 400/1500 | Sys Rwd: 1590.69 | Latency: 0.865s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:58:58]   └─ Ep 500/1500 | Sys Rwd: 1590.59 | Latency: 0.866s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:02]   └─ Ep 600/1500 | Sys Rwd: 1590.45 | Latency: 0.868s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:07]   └─ Ep 700/1500 | Sys Rwd: 1590.24 | Latency: 0.871s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:11]   └─ Ep 800/1500 | Sys Rwd: 1590.41 | Latency: 0.869s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:15]   └─ Ep 900/1500 | Sys Rwd: 1590.55 | Latency: 0.867s | Energy: 36.4J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:20]   └─ Ep 1000/1500 | Sys Rwd: 1590.39 | Latency: 0.869s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:24]   └─ Ep 1100/1500 | Sys Rwd: 1590.72 | Latency: 0.864s | Energy: 36.6J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:28]   └─ Ep 1200/1500 | Sys Rwd: 1590.57 | Latency: 0.866s | Energy: 36.4J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:33]   └─ Ep 1300/1500 | Sys Rwd: 1590.50 | Latency: 0.867s | Energy: 36.7J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:37]   └─ Ep 1400/1500 | Sys Rwd: 1590.27 | Latency: 0.871s | Energy: 36.5J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:41]   └─ Ep 1500/1500 | Sys Rwd: 1590.59 | Latency: 0.866s | Energy: 36.2J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:41]   ⭐ 训练完成，正在进行最终的无噪声验证测试...
+[2026-04-14 15:59:41]   ✅ 最终稳定表现 -> Reward: 1590.72 | Latency: 0.86s | Energy: 36.6J | Avg MD-VQM: 6.59
+[2026-04-14 15:59:41] 
+📄 最终测试数据已成功汇总并无损导出至: final_results.csv
+[2026-04-14 15:59:41] ✅ 正在绘制学术排版级双Y轴长图...
+[2026-04-14 15:59:43] 
+🎉 实验圆满完成！
+[2026-04-14 15:59:43] 👉 完整的运行日志和数据已保存至 logs/ 目录。

@@ -122,7 +122,7 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1
             ep_reward += sum(rewards_dict.values())
             ep_latency += np.mean([infos[ue]['delay'] for ue in infos])
             ep_energy += np.sum([infos[ue]['energy'] for ue in infos])
-            ep_vqm += np.mean([infos[ue]['vqm'] for ue in infos])
+            ep_vqm += np.mean([infos[ue]['md_vqm'] for ue in infos])
             steps += 1
 
             if agent_name == "MA-Diffusion-RL":
@@ -188,7 +188,7 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1
             ep_reward += sum(rewards_dict.values())
             ep_latency += np.mean([infos[ue]['delay'] for ue in infos])
             ep_energy += np.sum([infos[ue]['energy'] for ue in infos])
-            ep_vqm += np.mean([infos[ue]['vqm'] for ue in infos])
+            ep_vqm += np.mean([infos[ue]['md_vqm'] for ue in infos])
             steps += 1
 
             obs_dict = next_obs_dict
