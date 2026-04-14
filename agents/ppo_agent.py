@@ -7,19 +7,38 @@ import numpy as np
 class MAPPOActor(nn.Module):
     def __init__(self, obs_dim, act_dim):
         super().__init__()
-        # 【防拥塞重构 4】维度自适应，确保不受扩展的 obs_dim 影响
+        # 动作空间分离：前 act_dim-1 维为离散 ES 选择，最后 1 维为连续步数
+        self.es_dim = act_dim - 1
+
         self.net = nn.Sequential(
             nn.Linear(obs_dim, 256), nn.LayerNorm(256), nn.ReLU(),
-            nn.Linear(256, 256), nn.LayerNorm(256), nn.ReLU(),
-            nn.Linear(256, act_dim), nn.Tanh()
+            nn.Linear(256, 256), nn.LayerNorm(256), nn.ReLU()
         )
-        self.log_std = nn.Parameter(torch.zeros(1, act_dim))
 
-    def forward(self, obs):
-        mean = self.net(obs)
-        std = torch.exp(self.log_std).expand_as(mean)
+        # 离散动作的 Logit 分支
+        self.es_logits_head = nn.Linear(256, self.es_dim)
+
+        # 连续推理步数的 Mean 分支
+        self.step_mean_head = nn.Sequential(
+            nn.Linear(256, 1), nn.Tanh()
+        )
+        self.step_log_std = nn.Parameter(torch.zeros(1, 1))
+
+    def forward(self, obs, action_mask=None):
+        x = self.net(obs)
+
+        # 1. ES 离散选择分支
+        es_logits = self.es_logits_head(x)
+        if action_mask is not None:
+            # 【核心掩码机制】强制把非法节点的 logit 抹成 -1e9，Softmax 之后概率绝对为 0
+            es_logits = es_logits + (1.0 - action_mask) * (-1e9)
+
+        # 2. 步数连续控制分支
+        step_mean = self.step_mean_head(x)
+        std = torch.exp(self.step_log_std).expand_as(step_mean)
         std = torch.clamp(std, min=1e-3, max=10.0)
-        return mean, std
+
+        return es_logits, step_mean, std
 
 
 class MAPPOCritic(nn.Module):
@@ -52,25 +71,43 @@ class MAPPOAgentSystem:
         for param_group in self.critic_opt.param_groups:
             param_group['lr'] = lr_critic
 
-    def select_actions(self, obs_dict, explore=True):
+    def select_actions(self, obs_dict, explore=True, action_mask_dict=None):
         agent_ids = list(obs_dict.keys())
         obs_tensor = torch.FloatTensor(np.array([obs_dict[aid] for aid in agent_ids])).to(self.device)
 
+        mask_tensor = None
+        if action_mask_dict is not None:
+            mask_tensor = torch.FloatTensor(np.array([action_mask_dict[aid] for aid in agent_ids])).to(self.device)
+
         with torch.no_grad():
-            mean, std = self.actor(obs_tensor)
+            es_logits, step_mean, step_std = self.actor(obs_tensor, action_mask=mask_tensor)
+
+            # 定义离散的分类分布 (Categorical) 和连续的正态分布 (Normal)
+            dist_es = torch.distributions.Categorical(logits=es_logits)
+            dist_step = torch.distributions.Normal(step_mean, step_std)
+
             if explore:
-                dist = torch.distributions.Normal(mean, std)
-                actions = dist.sample()
-                log_probs = dist.log_prob(actions).sum(dim=-1)
+                es_acts = dist_es.sample()
+                step_acts = dist_step.sample()
+                # 联合动作概率等于独立维度的对数概率求和
+                log_probs = dist_es.log_prob(es_acts) + dist_step.log_prob(step_acts).sum(dim=-1)
             else:
-                actions = mean
+                es_acts = torch.argmax(es_logits, dim=-1)
+                step_acts = step_mean
                 log_probs = torch.zeros(len(agent_ids)).to(self.device)
 
-            actions = torch.clamp(actions, -1.0, 1.0)
+            step_acts = torch.clamp(step_acts, -1.0, 1.0)
+
+            # 兼容环境 step 解析的连续向量格式：
+            # 将选择的类别变成独热编码，再映射到类似连续的 [-1, 1]，环境中的 argmax() 能够无损反解
+            es_one_hot = torch.zeros_like(es_logits).scatter_(-1, es_acts.unsqueeze(-1), 1.0)
+            es_out = es_one_hot * 2.0 - 1.0
+
+            actions = torch.cat([es_out, step_acts], dim=-1)
 
         return {aid: actions[i].cpu().numpy() for i, aid in enumerate(agent_ids)}, log_probs
 
-    def store_transition(self, obs_dict, action_dict, log_probs, rewards_dict):
+    def store_transition(self, obs_dict, action_dict, log_probs, rewards_dict, action_mask_dict=None):
         agent_ids = list(obs_dict.keys())
         obs_arr = np.array([obs_dict[aid] for aid in agent_ids])
         act_arr = np.array([action_dict[aid] for aid in agent_ids])
@@ -78,10 +115,18 @@ class MAPPOAgentSystem:
         avg_reward_per_agent = sum(rewards_dict.values()) / len(agent_ids)
         sys_reward = avg_reward_per_agent / 5.0
 
+        mask_arr = np.array([action_mask_dict[aid] for aid in agent_ids]) if action_mask_dict is not None else None
+
+        if isinstance(log_probs, torch.Tensor):
+            lp_arr = log_probs.cpu().numpy()
+        else:
+            lp_arr = log_probs
+
         self.buffer.append({
             'obs': obs_arr, 'acts': act_arr,
-            'log_probs': log_probs.cpu().numpy(),
-            'reward': sys_reward
+            'log_probs': lp_arr,
+            'reward': sys_reward,
+            'mask': mask_arr
         })
 
     def reset_buffer(self):
@@ -93,6 +138,12 @@ class MAPPOAgentSystem:
         obs_batch = torch.FloatTensor(np.array([b['obs'] for b in self.buffer])).to(self.device)
         act_batch = torch.FloatTensor(np.array([b['acts'] for b in self.buffer])).to(self.device)
         old_log_probs = torch.FloatTensor(np.array([b['log_probs'] for b in self.buffer])).to(self.device)
+
+        masks_list = [b['mask'] for b in self.buffer]
+        if all(m is not None for m in masks_list):
+            mask_batch = torch.FloatTensor(np.array(masks_list)).to(self.device)
+        else:
+            mask_batch = None
 
         rewards = [b['reward'] for b in self.buffer]
         returns = []
@@ -109,11 +160,18 @@ class MAPPOAgentSystem:
         g_obs_batch = obs_batch.view(b_size, -1)
 
         for _ in range(4):
-            mean, std = self.actor(obs_batch)
-            dist = torch.distributions.Normal(mean, std)
-            new_log_probs = dist.log_prob(act_batch).sum(dim=-1)
+            es_logits, step_mean, step_std = self.actor(obs_batch, action_mask=mask_batch)
+            dist_es = torch.distributions.Categorical(logits=es_logits)
+            dist_step = torch.distributions.Normal(step_mean, step_std)
 
-            entropy = dist.entropy().sum(dim=-1).mean()
+            # 反解存储进缓冲区的动作
+            es_acts = torch.argmax(act_batch[:, :, :-1], dim=-1)
+            step_acts = act_batch[:, :, -1:]
+
+            new_log_probs = dist_es.log_prob(es_acts) + dist_step.log_prob(step_acts).sum(dim=-1)
+
+            # PPO 混合熵鼓励探索
+            entropy = (dist_es.entropy() + dist_step.entropy().sum(dim=-1)).mean()
 
             values = self.critic(g_obs_batch).view(-1, 1)
             advantages = (returns - values.detach())

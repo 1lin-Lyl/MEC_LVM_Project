@@ -5,8 +5,8 @@ from gymnasium import spaces
 
 class MultiAgentMECLVMEnvMulti(gym.Env):
     """
-    环境: 面向视觉大模型(LVM)的多智能体MEC卸载与推理步数联合优化环境。
-    (INFOCOM 2025 顶会标准真实物理参数版 + 极端异构化 + 严格状态归一化 + 奖励截断有界化 + Action Masking)
+    环境: 面向视觉大模型(LVM)的【推理精度】与【任务卸载】联合优化环境。
+    (深度扣题版：引入 FP16/INT8/INT4 精度权衡，强化 VQM 视觉质量权重，严格状态归一化与有界化)
     """
 
     def __init__(self, env_type="B"):
@@ -28,11 +28,13 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         self.B_es = 20e6
         self.P_tx = 0.1
         self.N_0 = 3.98e-21
+        # LVM 在最高精度(FP16)下的基准单步推理计算复杂度 (20 GFLOPs / Mbits)
         self.eta = 20.0
         self.P_es_active = 250.0
 
-        # 新增排队拥塞感知 queue_norm (M维)，总维度变为 3 + 4*M + 1
+        # 状态与动作维度
         self.obs_dim = 3 + 4 * self.num_ess + 1
+        # 动作空间：前 M+1 维是卸载决策(Offloading), 最后 1 维是 LVM推理精度(Inference Precision)
         self.action_dim = self.num_ess + 2
 
         self.max_steps = 10
@@ -45,11 +47,12 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         # 奖励归一化与有界化 (Reward Bounding) 常量设定
         # ========================================================
         self.T_th = 15.0  # 最大容忍延迟 (s)
-        self.E_max = 5000.0  # 最大容忍系统能耗 (J)，规避百万焦耳的量级碾压
-        self.violation_penalty = -10.0  # 固定拥塞违规惩罚 (取代无下限的二次方惩罚)
+        self.E_max = 5000.0  # 最大容忍系统能耗 (J)
+        self.violation_penalty = -10.0  # 固定拥塞违规惩罚
 
-        # 奖励加权系数 (将各项指标映射至同一量级)
-        self.w_vqm = 5.0  # 视频质量增益权重
+        # 【深度扣题优化】：大幅强化 LVM 的 MD-VQM 视觉质量指标权重！
+        # 促使 RL 智能体在“低延迟/低能耗”与“高画质(高精度)”间寻找更优的帕累托前沿
+        self.w_vqm = 10.0  # 视频质量增益权重 (原为 5.0，现提升至 10.0)
         self.w_delay = 2.0  # 延迟惩罚权重
         self.w_energy = 1.0  # 能耗惩罚权重
 
@@ -90,15 +93,9 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             ], dtype=np.float32)
 
     def _get_normalized_states(self):
-        """
-        状态空间的严格 Min-Max 归一化。
-        确保所有传给 RL 网络的特征都死死锁在 [0, 1] 区间，从源头消灭梯度爆炸。
-        """
         norm_states = {}
 
-        # ES算力归一化: (F - F_min) / (F_max - F_min)
         f_norm = np.clip((np.array(self.F_ess) - 2000.0) / (80000.0 - 2000.0), 0.0, 1.0)
-        # 负载归一化
         l_norm = np.clip(np.array(self.es_loads) / float(self.num_ues), 0.0, 1.0)
 
         total_used_load = sum(self.es_loads)
@@ -112,7 +109,6 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             snr_m = (self.P_tx * 2e-6) / (expected_bw * self.N_0)
             snr_norm_list.append(np.clip(snr_m / 1e7, 0.0, 1.0))
 
-            # 服务器排队拥塞感知: 严格约束在 [0, 1] 之间
             queue_ratio = self.es_loads[m] / float(self.num_ues)
             queue_norm_list.append(np.clip(queue_ratio, 0.0, 1.0))
 
@@ -121,10 +117,9 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
 
         for k, v in self.states.items():
             norm_v = np.zeros(3, dtype=np.float32)
-            # UE 私有状态 Min-Max 归一化
-            norm_v[0] = np.clip((v[0] - 5.0) / (20.0 - 5.0), 0.0, 1.0)  # Data size (5~20)
-            norm_v[1] = np.clip((v[1] - 50.0) / (100.0 - 50.0), 0.0, 1.0)  # Local CPU (50~100)
-            norm_v[2] = np.clip((v[2] - 1e-8) / (8e-6 - 1e-8), 0.0, 1.0)  # Channel gain (1e-8~8e-6)
+            norm_v[0] = np.clip((v[0] - 5.0) / (20.0 - 5.0), 0.0, 1.0)
+            norm_v[1] = np.clip((v[1] - 50.0) / (100.0 - 50.0), 0.0, 1.0)
+            norm_v[2] = np.clip((v[2] - 1e-8) / (8e-6 - 1e-8), 0.0, 1.0)
 
             norm_states[k] = np.concatenate([norm_v, f_norm, l_norm, snr_norm, queue_norm, bw_norm_arr]).astype(
                 np.float32)
@@ -132,30 +127,26 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
 
     def get_action_mask(self, ue_id):
         """
-        【新增】获取指定 UE 的动作掩码 (Action Mask)。
-        返回一个长度为 num_ess + 1 的一维数组，1.0 表示动作合法，0.0 表示动作非法。
+        获取指定 UE 的动作掩码 (Action Mask)。
         """
         mask = np.ones(self.num_ess + 1, dtype=np.float32)
-        # 1. 本地执行(Local)始终合法，假设本地算力底线充足
         mask[0] = 1.0
 
         data_size, local_cpu, channel_gain = self.states[ue_id]
 
-        # 预估时采用均值推理步数 30 步作为探测基准
-        est_steps = 30
-        req_cycles = self.eta * data_size * est_steps
+        # 预估时采用 INT8 量化精度 (Bit-width=8) 的计算量作为探测基准
+        est_precision = 8
+        req_cycles = self.eta * data_size * (est_precision / 16.0)
 
         for m in range(self.num_ess):
-            # 规则 A: 队列积压量达到系统总容量的 90% (严重拥塞，禁止新任务排队)
             if self.es_loads[m] >= 0.9 * self.num_ues:
                 mask[m + 1] = 0.0
                 continue
 
-            # 规则 B: 预估延迟超时 (基于当前公共负载计算，若预估加入后直接超时，则禁止)
             competitors = self.es_loads[m] + 1
             alloc_bandwidth = self.B_es / competitors
             snr = (self.P_tx * channel_gain) / (alloc_bandwidth * self.N_0)
-            trans_rate = (alloc_bandwidth * np.log2(1 + snr)) / 1e6  # Mbps
+            trans_rate = (alloc_bandwidth * np.log2(1 + snr)) / 1e6
 
             trans_delay = data_size / (trans_rate + 1e-9)
             alloc_cpu = self.F_ess[m] / competitors
@@ -168,35 +159,32 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
 
         return mask
 
-    def _calculate_md_vqm(self, steps):
+    def _calculate_md_vqm(self, precision):
+        """
+        【联合优化】: 基于 LVM 量化级别的多维视频质量模型 (MD-VQM)
+        FP16 (16-bit) 提供极高画质，INT4 (4-bit) 提供低画质。
+        """
         q_max = 20.0
-        theta = 0.05
-        d_min = 5
-        if steps <= d_min:
+        theta = 0.2
+        d_min = 2.0
+        if precision <= d_min:
             return 0.0
-        return q_max * (1 - np.exp(-theta * (steps - d_min)))
+        # FP16 ≈ 18.8分 | INT8 ≈ 13.9分 | INT4 ≈ 6.5分
+        return q_max * (1 - np.exp(-theta * (precision - d_min)))
 
     def _calculate_reward(self, delay, energy, vqm_utility):
         """
-        独立且安全的 Reward 计算模块。
-        处理巨大物理差异，实施加权求和，并在最后加入坚固的硬截断。
+        奖励计算模块。实施加权求和，并在最后加入坚固的硬截断。
         """
-        # 1. 质量归一化 [0, 1]
         vqm_norm = vqm_utility / 20.0
-
-        # 2. 延迟与能耗的软截断归一化 [0, 1]
         delay_norm = min(delay / self.T_th, 1.0)
         energy_norm = min(energy / self.E_max, 1.0)
 
-        # 3. 严重违规惩罚 (如果队列溢出或极度拥塞/耗电，赋予固定负常数而非无限深渊)
         penalty = 0.0
         if delay > self.T_th or energy > self.E_max:
             penalty = self.violation_penalty
 
-            # 4. 量纲对齐与加权求和 (保障基础 Reward 处于合理规模)
         base_reward = (self.w_vqm * vqm_norm) - (self.w_delay * delay_norm) - (self.w_energy * energy_norm)
-
-        # 5. Reward Clipping: 最终安全垫，强制约束单步奖赏在 [-5, 5] 之间
         final_reward = np.clip(base_reward + penalty, -5.0, 5.0)
         return final_reward
 
@@ -208,32 +196,35 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 action_dict[agent_id] = np.zeros_like(act)
 
         offload_decisions = {}
-        inference_steps = {}
+        inference_precisions = {}
         es_load_count = {k: 0 for k in range(1, self.num_ess + 1)}
 
-        # 【新增】记录因选择被 Mask 掉的非法动作而失败的任务
         failed_tasks = set()
 
+        # 【联合优化动作解析】：卸载服务器选择 + LVM 量化精度级别
         for i in range(self.num_ues):
             agent_id = f"ue_{i}"
             act = action_dict[agent_id]
 
+            # 解析 1: 目标服务器 Target ES
             target = int(np.argmax(act[:self.num_ess + 1]))
 
-            # 【新增】动作掩码校验
             mask = self.get_action_mask(agent_id)
             if mask[target] == 0.0:
-                # 动作非法，任务失败/掉线，不进入后续基站排队计数
                 failed_tasks.add(agent_id)
-                offload_decisions[agent_id] = target  # 依然记录原本意图，供 info 分析
+                offload_decisions[agent_id] = target
             else:
                 offload_decisions[agent_id] = target
                 if target > 0:
                     es_load_count[target] += 1
 
-            step_val = act[-1]
-            steps = int(np.round((np.clip(step_val, -1.0, 1.0) + 1.0) / 2.0 * 40 + 10))
-            inference_steps[agent_id] = np.clip(steps, 10, 50)
+            # 解析 2: LVM 推理精度级别 (Inference Precision)
+            # 将动作的最后一个维度 [-1, 1] 映射为三种具有物理意义的量化级别：
+            # Index 0: 4-bit (INT4), Index 1: 8-bit (INT8), Index 2: 16-bit (FP16)
+            precision_levels = [4.0, 8.0, 16.0]
+            precision_val = act[-1]
+            idx = int(np.round((np.clip(precision_val, -1.0, 1.0) + 1.0) / 2.0 * 2))
+            inference_precisions[agent_id] = precision_levels[idx]
 
         self.es_loads = [es_load_count[m + 1] for m in range(self.num_ess)]
 
@@ -245,25 +236,30 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             data_size, local_cpu, channel_gain = self.states[agent_id]
 
             target_es = offload_decisions[agent_id]
-            steps = inference_steps[agent_id]
+            precision = inference_precisions[agent_id]
 
-            # 【新增】处理非法掉线任务的极值惩罚
             if agent_id in failed_tasks:
-                delay = self.T_th * 2.0  # 记录为严重超时的失败延迟
+                delay = self.T_th * 2.0
                 energy = 0.0
                 vqm_utility = 0.0
-                reward = -5.0  # 直接赋予硬截断底线的严厉惩罚
+                reward = -5.0
 
                 rewards[agent_id] = float(reward)
                 infos[agent_id] = {
-                    'target': target_es, 'steps': steps,
-                    'vqm': vqm_utility, 'delay': delay, 'energy': energy,
+                    'target': target_es,
+                    'inference_precision': precision,
+                    'md_vqm': vqm_utility,
+                    'delay': delay,
+                    'energy': energy,
                     'status': 'failed_masked'
                 }
-                continue  # 跳过物理计算，相当于任务已丢弃
+                continue
 
-            req_cycles = self.eta * data_size * steps
-            vqm_utility = self._calculate_md_vqm(steps)
+                # 【物理响应映射】：计算量与精度(位宽)成正比。FP16为满载eta，INT4仅为1/4计算量
+            req_cycles = self.eta * data_size * (precision / 16.0)
+
+            # 【效用响应映射】：调用精度到 MD-VQM 评分函数的映射
+            vqm_utility = self._calculate_md_vqm(precision)
 
             delay = 0.0
             energy = 0.0
@@ -290,13 +286,17 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 delay = trans_delay + comp_delay
                 energy = trans_energy + comp_energy
 
-                # 调用重构后的有界化 Reward 计算模块
             reward = self._calculate_reward(delay, energy, vqm_utility)
 
             rewards[agent_id] = float(reward)
+
+            # 【指标对外暴露】：严格使用 md_vqm 和 inference_precision 键名
             infos[agent_id] = {
-                'target': target_es, 'steps': steps,
-                'vqm': vqm_utility, 'delay': delay, 'energy': energy,
+                'target': target_es,
+                'inference_precision': precision,
+                'md_vqm': vqm_utility,
+                'delay': delay,
+                'energy': energy,
                 'status': 'success'
             }
 

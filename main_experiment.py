@@ -4,6 +4,8 @@ import os
 import copy
 import random
 import csv
+import logging
+import datetime
 
 from envs.mec_lvm_env_multi import MultiAgentMECLVMEnvMulti
 from agents.mad2rl_agent import MADiffusionRLSystem
@@ -12,6 +14,32 @@ from agents.heuristic_agent import GreedyAgentSystem
 from agents.random_agent import RandomAgentSystem
 from agents.local_agent import LocalOnlyAgentSystem
 from utils.plot_results import plot_experiment_results
+
+
+def setup_logger():
+    """配置专业级双写日志系统：输出到控制台的同时追加至日志文件"""
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"experiment_run_{timestamp}.log")
+
+    logger = logging.getLogger("MEC_LVM_Experiment")
+    logger.setLevel(logging.INFO)
+
+    # 定义带时间戳的美观日志格式
+    formatter = logging.Formatter('[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+    # 配置文件 Handler
+    fh = logging.FileHandler(log_file, encoding='utf-8')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    # 配置控制台 Handler
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    return logger
 
 
 def set_seed(seed=42):
@@ -24,8 +52,8 @@ def set_seed(seed=42):
         torch.backends.cudnn.benchmark = False
 
 
-def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
-    print(f"\n🚀 开始在 Env {env_name} (规模: {env.num_ess}ES, {env.num_ues}UE) 独立训练/测试 {agent_name} ...")
+def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1500):
+    logger.info(f"\n🚀 开始在 Env {env_name} (规模: {env.num_ess}ES, {env.num_ues}UE) 独立训练/测试 {agent_name} ...")
 
     agent = AgentClass(env.num_ues, env.obs_dim, env.action_dim)
     # 初始化专家导师，用于专家引导探索
@@ -125,13 +153,15 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
 
         if (ep + 1) % 100 == 0:
             avg_eng_print = np.mean(metrics['energy'][-50:])
-            print(
-                f"  └─ Ep {ep + 1}/{episodes} | Sys Rwd: {np.mean(metrics['reward'][-50:]):.2f} | Latency: {np.mean(metrics['latency'][-50:]):.3f}s | Energy: {avg_eng_print:.1f}J")
+            avg_vqm_print = np.mean(metrics['vqm'][-50:])
+            # 增加 Avg MD-VQM 的重点打印记录
+            logger.info(
+                f"  └─ Ep {ep + 1}/{episodes} | Sys Rwd: {np.mean(metrics['reward'][-50:]):.2f} | Latency: {np.mean(metrics['latency'][-50:]):.3f}s | Energy: {avg_eng_print:.1f}J | Avg MD-VQM: {avg_vqm_print:.2f}")
 
     # ----------------------------------------------------
     # 第二阶段：最终测试 (10 轮纯评估)
     # ----------------------------------------------------
-    print(f"  ⭐ 训练完成，正在进行最终的无噪声验证测试...")
+    logger.info(f"  ⭐ 训练完成，正在进行最终的无噪声验证测试...")
     if agent_name in ["MA-Diffusion-RL", "MAPPO"] and best_actor_weights is not None:
         agent.actor.load_state_dict(best_actor_weights)
 
@@ -171,13 +201,19 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, episodes=1500):
         eval_metrics["vqm"].append(ep_vqm / steps)
 
     final_eval_avg = {k: np.mean(v) for k, v in eval_metrics.items()}
-    print(
-        f"  ✅ 最终稳定表现 -> Reward: {final_eval_avg['reward']:.2f} | Latency: {final_eval_avg['latency']:.2f}s | Energy: {final_eval_avg['energy']:.1f}J")
+    logger.info(
+        f"  ✅ 最终稳定表现 -> Reward: {final_eval_avg['reward']:.2f} | Latency: {final_eval_avg['latency']:.2f}s | Energy: {final_eval_avg['energy']:.1f}J | Avg MD-VQM: {final_eval_avg['vqm']:.2f}")
 
     return metrics, final_eval_avg
 
 
 if __name__ == "__main__":
+    # 配置全局日志
+    logger = setup_logger()
+    logger.info("=" * 60)
+    logger.info("🚀 毕业设计：面向视觉大模型(LVM)的推理与任务卸载联合优化")
+    logger.info("=" * 60)
+
     set_seed(42)
 
     envs = {
@@ -198,11 +234,11 @@ if __name__ == "__main__":
     eval_results = {"A": {}, "B": {}, "C": {}}
 
     for env_name, env_obj in envs.items():
-        print(f"\n" + "=" * 50)
-        print(f"🌐 正在进入网络规模 {env_name} 独立实验组")
-        print("=" * 50)
+        logger.info(f"\n" + "=" * 50)
+        logger.info(f"🌐 正在进入网络规模 {env_name} 独立实验组")
+        logger.info("=" * 50)
         for algo_name, AgentClass in algos:
-            metrics, eval_avg = train_and_evaluate(algo_name, AgentClass, env_obj, env_name, episodes=1500)
+            metrics, eval_avg = train_and_evaluate(algo_name, AgentClass, env_obj, env_name, logger, episodes=1500)
             full_results[env_name][algo_name] = metrics
             eval_results[env_name][algo_name] = eval_avg
 
@@ -224,6 +260,10 @@ if __name__ == "__main__":
                     f"{res['vqm']:.4f}"
                 ])
 
-    print(f"\n📄 最终测试数据已成功汇总并无损导出至: {csv_file}")
-    print("✅ 正在绘制学术排版级双Y轴长图...")
+    logger.info(f"\n📄 最终测试数据已成功汇总并无损导出至: {csv_file}")
+    logger.info("✅ 正在绘制学术排版级双Y轴长图...")
     plot_experiment_results(full_results, eval_results)
+
+    # 实验结束明确提示
+    logger.info("\n🎉 实验圆满完成！")
+    logger.info("👉 完整的运行日志和数据已保存至 logs/ 目录。")
