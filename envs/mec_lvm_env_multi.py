@@ -6,7 +6,7 @@ from gymnasium import spaces
 class MultiAgentMECLVMEnvMulti(gym.Env):
     """
     环境: 面向视觉大模型(LVM)的【推理精度】与【任务卸载】联合优化环境。
-    (深度扣题版：引入 FP16/INT8/INT4 精度权衡，强化 VQM 视觉质量权重，严格状态归一化与有界化)
+    (深度扣题版：引入 FP16/INT8/INT4 精度权衡，强化 VQM 视觉质量权重，严格状态归一化，Tanh软奖励有界化)
     """
 
     def __init__(self, env_type="B"):
@@ -44,17 +44,20 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
         self.es_loads = [0] * self.num_ess
 
         # ========================================================
-        # 奖励归一化与有界化 (Reward Bounding) 常量设定
+        # 【核心重构】奖励计算与 Tanh 软归一化防爆炸 (Soft Reward Normalization)
         # ========================================================
-        self.T_th = 15.0  # 最大容忍延迟 (s)
-        self.E_max = 5000.0  # 最大容忍系统能耗 (J)
-        self.violation_penalty = -10.0  # 固定拥塞违规惩罚
+        self.T_th = 15.0  # 最大容忍延迟基准值 (s)，用于内部无量纲化
+        self.E_max = 5000.0  # 最大容忍系统能耗基准值 (J)，用于内部无量纲化
 
-        # 【深度扣题优化】：大幅强化 LVM 的 MD-VQM 视觉质量指标权重！
-        # 促使 RL 智能体在“低延迟/低能耗”与“高画质(高精度)”间寻找更优的帕累托前沿
-        self.w_vqm = 10.0  # 视频质量增益权重 (原为 5.0，现提升至 10.0)
-        self.w_delay = 2.0  # 延迟惩罚权重
-        self.w_energy = 1.0  # 能耗惩罚权重
+        # 动态权重调整：在保证 VQM 为主导的同时，大幅增加对延迟和能耗的敏感度
+        # 迫使智能体在画质达到满分后，依然有动力“精打细算”，杜绝“躺平”
+        self.w_vqm = 10.0  # 视频质量增益权重
+        self.w_delay = 8.0  # 延迟惩罚权重 (大幅提高)
+        self.w_energy = 5.0  # 能耗惩罚权重 (大幅提高)
+
+        # Tanh 软映射参数：取代 np.clip 的硬截断
+        self.reward_scale = 10.0  # 将最终奖励平滑约束在 [-10, 10] 之间
+        self.reward_temp = 10.0  # 温度系数，控制 Tanh 梯度的平滑宽度，防止早期梯度过早消失
 
     def reset(self, seed=None):
         if seed is not None:
@@ -93,6 +96,10 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             ], dtype=np.float32)
 
     def _get_normalized_states(self):
+        """
+        状态空间的严格 Min-Max 归一化。
+        确保所有传给 RL 网络的特征都死死锁在 [0, 1] 区间，从源头消灭感知层的数值爆炸。
+        """
         norm_states = {}
 
         f_norm = np.clip((np.array(self.F_ess) - 2000.0) / (80000.0 - 2000.0), 0.0, 1.0)
@@ -162,30 +169,32 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
     def _calculate_md_vqm(self, precision):
         """
         【联合优化】: 基于 LVM 量化级别的多维视频质量模型 (MD-VQM)
-        FP16 (16-bit) 提供极高画质，INT4 (4-bit) 提供低画质。
         """
         q_max = 20.0
         theta = 0.2
         d_min = 2.0
         if precision <= d_min:
             return 0.0
-        # FP16 ≈ 18.8分 | INT8 ≈ 13.9分 | INT4 ≈ 6.5分
         return q_max * (1 - np.exp(-theta * (precision - d_min)))
 
     def _calculate_reward(self, delay, energy, vqm_utility):
         """
-        奖励计算模块。实施加权求和，并在最后加入坚固的硬截断。
+        【彻底修复】：使用 Tanh 软映射取代所有硬截断。
+        保证梯度单调递增，让 RL 无论处在多差的境地，都有动力去优化哪怕 1 秒的延迟。
         """
+        # 1. 内部无量纲化：提取物理特征的相对比例 (绝不使用 min/max 进行硬截断)
         vqm_norm = vqm_utility / 20.0
-        delay_norm = min(delay / self.T_th, 1.0)
-        energy_norm = min(energy / self.E_max, 1.0)
+        delay_norm = delay / self.T_th
+        energy_norm = energy / self.E_max
 
-        penalty = 0.0
-        if delay > self.T_th or energy > self.E_max:
-            penalty = self.violation_penalty
+        # 2. 连续博弈公式：服务效用 - 资源成本惩罚
+        raw_reward = (self.w_vqm * vqm_norm) - (self.w_delay * delay_norm) - (self.w_energy * energy_norm)
 
-        base_reward = (self.w_vqm * vqm_norm) - (self.w_delay * delay_norm) - (self.w_energy * energy_norm)
-        final_reward = np.clip(base_reward + penalty, -5.0, 5.0)
+        # 3. Tanh 软归一化防爆炸
+        # 通过 np.tanh 将极端恶劣或极度优秀的 Raw_Reward 平滑压扁至 [-SCALE, SCALE]
+        # 由于 tanh 处处可导，Actor 能时刻感知到 "降低 delay_norm" 带来的微小收益
+        final_reward = self.reward_scale * np.tanh(raw_reward / self.reward_temp)
+
         return final_reward
 
     def step(self, action_dict):
@@ -201,12 +210,10 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
 
         failed_tasks = set()
 
-        # 【联合优化动作解析】：卸载服务器选择 + LVM 量化精度级别
         for i in range(self.num_ues):
             agent_id = f"ue_{i}"
             act = action_dict[agent_id]
 
-            # 解析 1: 目标服务器 Target ES
             target = int(np.argmax(act[:self.num_ess + 1]))
 
             mask = self.get_action_mask(agent_id)
@@ -218,9 +225,6 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 if target > 0:
                     es_load_count[target] += 1
 
-            # 解析 2: LVM 推理精度级别 (Inference Precision)
-            # 将动作的最后一个维度 [-1, 1] 映射为三种具有物理意义的量化级别：
-            # Index 0: 4-bit (INT4), Index 1: 8-bit (INT8), Index 2: 16-bit (FP16)
             precision_levels = [4.0, 8.0, 16.0]
             precision_val = act[-1]
             idx = int(np.round((np.clip(precision_val, -1.0, 1.0) + 1.0) / 2.0 * 2))
@@ -239,10 +243,13 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
             precision = inference_precisions[agent_id]
 
             if agent_id in failed_tasks:
+                # 若选择了被 Mask 掉的非法动作，给予合理的虚构极端惩罚值
                 delay = self.T_th * 2.0
-                energy = 0.0
+                energy = self.E_max  # 取最大能耗进行惩罚
                 vqm_utility = 0.0
-                reward = -5.0
+
+                # 【统一接口】直接复用连续加权公式，不再生硬指定 -5.0
+                reward = self._calculate_reward(delay, energy, vqm_utility)
 
                 rewards[agent_id] = float(reward)
                 infos[agent_id] = {
@@ -255,10 +262,7 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 }
                 continue
 
-                # 【物理响应映射】：计算量与精度(位宽)成正比。FP16为满载eta，INT4仅为1/4计算量
             req_cycles = self.eta * data_size * (precision / 16.0)
-
-            # 【效用响应映射】：调用精度到 MD-VQM 评分函数的映射
             vqm_utility = self._calculate_md_vqm(precision)
 
             delay = 0.0
@@ -286,11 +290,10 @@ class MultiAgentMECLVMEnvMulti(gym.Env):
                 delay = trans_delay + comp_delay
                 energy = trans_energy + comp_energy
 
+                # 调用彻底重构后的 Tanh 软归一化防爆炸 Reward 函数
             reward = self._calculate_reward(delay, energy, vqm_utility)
 
             rewards[agent_id] = float(reward)
-
-            # 【指标对外暴露】：严格使用 md_vqm 和 inference_precision 键名
             infos[agent_id] = {
                 'target': target_es,
                 'inference_precision': precision,

@@ -52,7 +52,7 @@ def set_seed(seed=42):
         torch.backends.cudnn.benchmark = False
 
 
-def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1500):
+def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=2000):
     logger.info(f"\n🚀 开始在 Env {env_name} (规模: {env.num_ess}ES, {env.num_ues}UE) 独立训练/测试 {agent_name} ...")
 
     agent = AgentClass(env.num_ues, env.obs_dim, env.action_dim)
@@ -67,23 +67,24 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1
         best_actor_weights = copy.deepcopy(agent.actor.state_dict())
 
     # ----------------------------------------------------
-    # 第一阶段：1500轮次的主训练与基线采样
+    # 第一阶段：2000轮次的主训练与基线采样 (最终实验版)
     # ----------------------------------------------------
     for ep in range(episodes):
-        if ep < 800:
+        # 【修改点】根据 2000 轮的总数，按比例缩放衰减周期
+        if ep < 1000:  # 前 1000 轮保持探索
             noise_scale = 0.1
             ent_coef = 0.05
             lr_a, lr_c = 3e-4, 1e-3
-        else:
-            decay_ratio = (ep - 800) / 700.0
+        else:  # 后 1000 轮线性衰减至收敛
+            decay_ratio = (ep - 1000) / 1000.0
             noise_scale = 0.1 - decay_ratio * 0.09
             ent_coef = 0.05 - decay_ratio * 0.04
             lr_a = 3e-4 - decay_ratio * 2.9e-4
             lr_c = 1e-3 - decay_ratio * 9e-4
 
-            # 专家引导概率衰减逻辑
-        if ep < 500:
-            expert_prob = 0.5 - (0.5 - 0.05) * (ep / 500.0)
+            # 专家引导概率衰减逻辑缩放 (延长到 1000 轮)
+        if ep < 1000:
+            expert_prob = 0.5 - (0.5 - 0.05) * (ep / 1000.0)
         else:
             expert_prob = 0.05
 
@@ -144,6 +145,7 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1
         metrics["energy"].append(ep_energy / steps)
         metrics["vqm"].append(ep_vqm / steps)
 
+        # 动态滑动窗口保存 Best Model，为了 2000 轮测试，窗口恢复为 50 轮
         if len(metrics["reward"]) >= 50:
             current_avg_rwd = np.mean(metrics["reward"][-50:])
             if current_avg_rwd > best_reward:
@@ -151,17 +153,17 @@ def train_and_evaluate(agent_name, AgentClass, env, env_name, logger, episodes=1
                 if agent_name in ["MA-Diffusion-RL", "MAPPO"]:
                     best_actor_weights = copy.deepcopy(agent.actor.state_dict())
 
+        # 【修改点】由于总轮数变为 2000，打印频率恢复到每 100 轮一次
         if (ep + 1) % 100 == 0:
             avg_eng_print = np.mean(metrics['energy'][-50:])
             avg_vqm_print = np.mean(metrics['vqm'][-50:])
-            # 增加 Avg MD-VQM 的重点打印记录
             logger.info(
                 f"  └─ Ep {ep + 1}/{episodes} | Sys Rwd: {np.mean(metrics['reward'][-50:]):.2f} | Latency: {np.mean(metrics['latency'][-50:]):.3f}s | Energy: {avg_eng_print:.1f}J | Avg MD-VQM: {avg_vqm_print:.2f}")
 
     # ----------------------------------------------------
     # 第二阶段：最终测试 (10 轮纯评估)
     # ----------------------------------------------------
-    logger.info(f"  ⭐ 训练完成，正在进行最终的无噪声验证测试...")
+    logger.info(f"  ⭐ 训练完成，正在加载 Best Model 进行无噪声验证测试...")
     if agent_name in ["MA-Diffusion-RL", "MAPPO"] and best_actor_weights is not None:
         agent.actor.load_state_dict(best_actor_weights)
 
@@ -238,7 +240,8 @@ if __name__ == "__main__":
         logger.info(f"🌐 正在进入网络规模 {env_name} 独立实验组")
         logger.info("=" * 50)
         for algo_name, AgentClass in algos:
-            metrics, eval_avg = train_and_evaluate(algo_name, AgentClass, env_obj, env_name, logger, episodes=1500)
+            # 【修改点】传递 episodes=2000 进行最终实验
+            metrics, eval_avg = train_and_evaluate(algo_name, AgentClass, env_obj, env_name, logger, episodes=2000)
             full_results[env_name][algo_name] = metrics
             eval_results[env_name][algo_name] = eval_avg
 
@@ -261,9 +264,9 @@ if __name__ == "__main__":
                 ])
 
     logger.info(f"\n📄 最终测试数据已成功汇总并无损导出至: {csv_file}")
-    logger.info("✅ 正在绘制学术排版级双Y轴长图...")
+    logger.info("✅ 正在绘制学术排版级长图...")
     plot_experiment_results(full_results, eval_results)
 
     # 实验结束明确提示
-    logger.info("\n🎉 实验圆满完成！")
+    logger.info("\n🎉 最终完整实验圆满完成！")
     logger.info("👉 完整的运行日志和数据已保存至 logs/ 目录。")
